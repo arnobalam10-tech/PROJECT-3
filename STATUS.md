@@ -11,9 +11,13 @@ Updated by: Claude Code
 
 ## Current Phase
 
-Phase 5 (Inbox/My Memos/Completed list views) — built and verified with the same evidence
-standard used since Phase 3: authorization-boundary claims backed by script/query results, UI
-rendering confirmed by an actual browser walkthrough.
+Phase 6 (Notifications — in-app + Resend email, PRD §13) — built by consuming Phase 4's existing
+`audit_log`/`notifications` write-paths rather than duplicating them, per the user's explicit
+instruction to verify that's actually true rather than assume it. One real gap found and fixed
+in the process (see below). **Live email delivery is NOT yet verified** — no Resend account
+exists yet, and `SUPABASE_SERVICE_ROLE_KEY` is currently absent from `.env.local` (flagged to the
+user, unresolved as of this note) — this is stated plainly rather than treating "the code path
+runs without throwing" as proof of delivery.
 
 ## Done ✅
 
@@ -259,6 +263,106 @@ edges, not just that the lists render.** Two things done, in this order:
    confirmed it moved correctly into `/completed` with the right outcome/priority/completed-at.
    Test memo deleted afterward.
 
+**Phase 6 — Notifications (PRD §13).**
+
+**Step 1: audited whether Phase 4 already covers all 8 trigger types, rather than assuming it —
+the user specifically warned this was a place a duplicate write-path could sneak in.** Grepped
+every `notify_user` call site across the Phase 4 migrations and built the mapping explicitly:
+
+| PRD §13 trigger | Notification `type` | Where it's written | Status before this session |
+|---|---|---|---|
+| memo requires action | `memo_requires_action` | submit/approve/decline | ✅ covered |
+| memo approved | *(see note)* | — | ✅ same instant as workflow completed, see below |
+| memo rejected | `memo_rejected` | reject | ✅ covered |
+| changes requested | `changes_requested` | request_changes | ✅ covered |
+| comment added | `comment_added` | comments AFTER INSERT trigger | ✅ covered |
+| memo resubmitted | `memo_resubmitted` | resubmit | ✅ covered |
+| workflow completed | `workflow_completed` | approve (nothing left queued) | ✅ covered |
+| **user assigned to a workflow** | *(none existed)* | — | ❌ **real gap** |
+
+- **"memo approved" vs. "workflow completed" — checked whether these are actually distinct
+  events rather than assuming they're the same:** in this data model, `memos.status` only ever
+  becomes `'approved'` at the exact instant the workflow completes (no partial-approval state
+  exists). Confirmed by re-reading `workflow_approve`'s completion branch: both the status update
+  and the notification happen in the same code path, atomically. Sending two notifications for
+  the same instant would be pure duplication with no product value, so one `workflow_completed`
+  notification (worded to say "was approved") covers both PRD bullets — a deliberate decision,
+  not an oversight.
+- **Real gap found: "user assigned to a workflow" only ever fired for the *first* participant**
+  (bundled into the same call as `memo_requires_action` at submission). Participants 2..N in the
+  initial chain got no notification at all until it became their turn — meaning someone third in
+  a five-person chain wouldn't know they were even on the workflow until everyone ahead of them
+  acted. **Fixed** in migration 019: `submit_memo` now sends `workflow_assignment` to every
+  participant in the initial chain; `workflow_approve` (forward-to-someone-new) and
+  `workflow_decline_reroute` also send `workflow_assignment` (in addition to
+  `memo_requires_action`) when adding someone who wasn't previously on the workflow at all.
+  Re-ran a full regression after this change (see below) — the underlying Phase 4 state machine
+  was untouched, only additional `notify_user` calls were added, and nothing broke.
+
+**Step 2: built the surfacing layer, deliberately as a pure consumer of what Phase 4 already
+writes** — confirming no duplicate "who gets notified" logic exists anywhere else in the codebase:
+- `/notifications` — in-app center, own-notifications-only (see boundary testing below), mark
+  one/all read.
+- Unread-count badge in the app shell nav, computed with a `head: true, count: 'exact'` query
+  (no row fetch needed just for the badge).
+- `src/lib/notifications.ts` — `sendEmailsForNewNotifications(memoId, sinceIso)`. Each workflow
+  server action captures a timestamp immediately before calling its RPC, and after the RPC
+  succeeds, this function reads whatever `notifications` rows were created for that memo since
+  that timestamp (via the service-role client, since `notifications` RLS is strictly
+  own-rows-only — see below) and emails each recipient through Resend. **This function makes zero
+  decisions about who should be notified** — it only reads rows that `private.notify_user()`
+  (Phase 4) already decided to create. Wired into all six workflow server actions plus the
+  general-comment action, all best-effort (a Resend/network failure is caught and logged, never
+  allowed to fail the underlying workflow action itself).
+
+**Rigor requested by the user, both addressed:**
+
+**1. Notification tenant/authorization boundaries — 11/11 checks passed**, ephemeral script, real
+signed-in users (Dave = sole participant, Eve = same-org zero-involvement user), real HTTP:
+- Confirmed the `workflow_assignment` gap fix works: Dave received both `workflow_assignment` and
+  `memo_requires_action` notifications at submission (he's the only, and thus first, participant).
+- **Eve (same org, zero involvement) could not see Dave's notification** — neither by direct id
+  lookup nor by querying for the memo_id at all.
+- **Even Alice, an org_admin in the same org, could not see Dave's notification.** This was
+  deliberately checked rather than assumed, since `memos` *does* have an admin-broadening RLS
+  clause and it would have been an easy mistake to accidentally carry that pattern over to
+  `notifications` — confirmed no such policy exists there; a user's notifications are visible
+  to nobody but that user, full stop.
+- Confirmed the RLS `UPDATE` policy on `notifications`, not just an app-level check: Eve's attempt
+  to mark Dave's notification read returned no error (an `UPDATE ... WHERE` matching zero rows
+  isn't an error) but genuinely changed nothing — re-checked as Dave immediately after and his
+  notification was still unread.
+- **Notification memo-link boundary**: Dave (valid participant) could open the memo a notification
+  linked to; Eve, given the exact same memo id a notification would have pointed to, still could
+  not — confirming Phase 5's memo-visibility RLS applies identically regardless of how someone
+  arrived at that id (typed URL, clicked a notification, doesn't matter).
+- All test users/data and the script deleted after.
+
+**2. Resend email — built correctly, but honestly NOT verified against a real inbox, and the
+distinction is documented explicitly rather than glossed over:**
+- No Resend account/API key exists yet (confirmed with the user rather than assumed — they don't
+  have one set up).
+- What **is** verified: submitted a real memo through the actual browser UI (not a script calling
+  the RPC directly) so the real `submitMemo` server action ran end-to-end, including the
+  `dispatchEmails` call into `sendEmailsForNewNotifications`. Checked the dev server logs
+  afterward — the action completed successfully (`submitMemo({"error":null}, {})`) with no
+  uncaught error, confirming the graceful-skip path (`resend_not_configured`) works correctly and
+  never breaks the primary workflow action, which is the one thing that *was* testable right now.
+- What is **not** verified and won't be claimed as done: that Resend's API actually accepts and
+  delivers a message, or that a real inbox receives content matching the triggering event. This
+  needs the user to provide `RESEND_API_KEY`/`RESEND_FROM_EMAIL` (added directly to `.env.local`,
+  not through chat) and a real recipient address before it can be checked for real.
+
+**Also checked, per the user's request — could not fully resolve, flagged clearly:**
+- **`SUPABASE_SERVICE_ROLE_KEY` is confirmed absent from `.env.local`** (verified via a full hex
+  dump of the file, not just grep, after the user initially called this a false alarm — it
+  wasn't). RESEND_API_KEY/RESEND_FROM_EMAIL are present but empty. Asked the user to check their
+  own copy of the file and re-add if needed; not yet resolved as of this note.
+- **Vercel's env vars could not be checked from this session at all** — no Vercel CLI is
+  installed (same limitation as the Phase 1 deploy handoff), and there's no API/MCP access to
+  Vercel here. This needs the user to check the Vercel dashboard directly; flagging rather than
+  guessing.
+
 ## In Progress 🚧
 
 - **Invite-user with the service-role key** — the key was added by the user this session, but the
@@ -349,8 +453,8 @@ deleted immediately after the run; both test scripts were deleted, not committed
 - [x] ~~Phase 4 — Workflow engine~~ **Done** — see Phase 4 section above.
 - [x] ~~Phase 5 — Inbox/My Memos/Completed~~ **Done** — see Phase 5 section above. (Memo details +
       timeline were already built as part of Phase 4.)
-- [ ] Phase 6 — Notifications (in-app + Resend email) — also add "Relay" branding to the email
-      templates once built (PRD's naming instruction covers "emails from Resend" explicitly).
+- [x] ~~Phase 6 — Notifications~~ **Built** — see Phase 6 section above. Live email delivery
+      genuinely unverified pending the user's Resend account; not claimed as done.
 - [ ] Phase 7 — Search, dashboard, reporting (regular-user search/visibility scope per PRD §2.5
       item 7 / §14 — narrower than org-wide, ties into the same `workflow_steps`-based visibility
       widening as Phase 4)
@@ -384,6 +488,12 @@ deleted immediately after the run; both test scripts were deleted, not committed
   row ("Finance"), one `memos` row ("Q3 Budget Approval Request" — kept deliberately as a
   rich-text/attachments demo of Phase 3 working; the throwaway "Test Delete Memo" row was deleted
   as part of testing the delete flow).
+- Minor, non-blocking: the browser console shows `[tiptap warn]: Duplicate extension names
+  found: ['link']` on every memo editor load — `StarterKit` already registers a Link extension
+  internally and `RichTextEditor` also adds `@tiptap/extension-link` explicitly. Purely cosmetic
+  (editor works correctly, extensively tested), noticed in this session's dev server logs while
+  checking for unrelated errors. Worth a two-minute cleanup in the Phase 10 design pass or
+  whenever next touching that component — not urgent enough to interrupt Phase 6 for.
 - `memo_number` generation is per-org-counter-table based, not a true Postgres sequence — chosen
   for simplicity and because `on conflict do update` on a single-row-per-org table is already
   race-safe for this scale. Documented in `DATABASE.md`; revisit only if it becomes a real
@@ -448,7 +558,13 @@ if needed. New entries below.)*
 - `SUPABASE_SERVICE_ROLE_KEY`: set by the user in `.env.local` and Vercel (confirmed by the user
   directly, never seen in chat). Not yet re-tested against the invite-user flow.
 - Resend: still not configured.
-- Last migration applied: `20260829070000_018_memo_last_activity_triggers`.
+- Last migration applied: `20260829071500_019_workflow_assignment_notifications`.
+- `SUPABASE_SERVICE_ROLE_KEY`: confirmed absent from `.env.local` as of this session (see Phase 6
+  above) — needed for both invite-user and now notification-email dispatch. Unresolved.
+- `RESEND_API_KEY`/`RESEND_FROM_EMAIL`: present in `.env.local` but empty. No Resend account
+  exists yet per the user.
+- Vercel env vars (both of the above): **not checked** — no tooling available in this session to
+  inspect Vercel directly; needs the user to confirm via the Vercel dashboard.
 - New Storage bucket: `attachments` (private).
 - New tables this session: `workflow_steps`, `comments`, `audit_log`, `notifications`,
   `memo_versions`. New `private.` helper functions: `is_workflow_participant()`,
@@ -467,6 +583,12 @@ that need cleanup or intentional replacement first.
 - [ ] Confirm `.env.example` is fully in sync (now includes `SUPABASE_SERVICE_ROLE_KEY`).
 - [ ] Write the separate project documentation file (PRD §28.B).
 - [ ] Click-test the real email-confirmation link end-to-end.
-- [ ] Re-test invite-user now that the service role key is configured.
+- [ ] Re-add `SUPABASE_SERVICE_ROLE_KEY` to `.env.local` + Vercel (confirmed missing this session),
+      then re-test invite-user AND notification email dispatch, which both now depend on it.
+- [ ] Set up a real Resend account (API key + verified from-address) and confirm actual email
+      delivery to a real inbox, matching the triggering event's content — not yet done.
+- [ ] Confirm both `SUPABASE_SERVICE_ROLE_KEY` and `RESEND_API_KEY`/`RESEND_FROM_EMAIL` are set in
+      Vercel's production env vars, not just locally (this session has no way to check Vercel
+      directly).
 - [ ] Enable "Leaked Password Protection" in the Supabase Auth dashboard before Phase 12.
 - [ ] Confirm the Vercel redeploy picked up this session's push and matches local `main`.

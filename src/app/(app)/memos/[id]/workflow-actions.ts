@@ -3,8 +3,20 @@
 import { revalidatePath } from "next/cache";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { sendEmailsForNewNotifications } from "@/lib/notifications";
 
 export type ActionState = { error: string | null };
+
+// Best-effort: read whatever notifications the RPC just created (Phase 4
+// owns that decision entirely) and email them. Never lets an email failure
+// fail the underlying workflow action.
+async function dispatchEmails(memoId: string, sinceIso: string) {
+  try {
+    await sendEmailsForNewNotifications(memoId, sinceIso);
+  } catch (e) {
+    console.error("Failed to dispatch notification emails", e);
+  }
+}
 
 export async function submitMemo(
   _prev: ActionState,
@@ -18,6 +30,7 @@ export async function submitMemo(
     return { error: "Add at least one participant before submitting." };
   }
 
+  const sinceIso = new Date().toISOString();
   const supabase = await createClient();
   const { error } = await supabase.rpc("submit_memo", {
     p_memo_id: memoId,
@@ -25,6 +38,7 @@ export async function submitMemo(
   });
 
   if (error) return { error: error.message };
+  await dispatchEmails(memoId, sinceIso);
 
   revalidatePath(`/memos/${memoId}`);
   revalidatePath("/memos");
@@ -41,6 +55,7 @@ export async function approveMemo(
   const comment = String(formData.get("comment") ?? "").trim() || null;
   const forwardTo = String(formData.get("forward_to_user_id") ?? "").trim() || null;
 
+  const sinceIso = new Date().toISOString();
   const supabase = await createClient();
   const { error } = await supabase.rpc("workflow_approve", {
     p_memo_id: memoId,
@@ -49,6 +64,7 @@ export async function approveMemo(
   });
 
   if (error) return { error: error.message };
+  await dispatchEmails(memoId, sinceIso);
 
   revalidatePath(`/memos/${memoId}`);
   revalidatePath("/inbox");
@@ -69,6 +85,7 @@ export async function declineMemo(
     return { error: "Choose who this should be rerouted to." };
   }
 
+  const sinceIso = new Date().toISOString();
   const supabase = await createClient();
   const { error } = await supabase.rpc("workflow_decline_reroute", {
     p_memo_id: memoId,
@@ -77,6 +94,7 @@ export async function declineMemo(
   });
 
   if (error) return { error: error.message };
+  await dispatchEmails(memoId, sinceIso);
 
   revalidatePath(`/memos/${memoId}`);
   revalidatePath("/inbox");
@@ -96,6 +114,7 @@ export async function rejectMemo(
     return { error: "A reason is required to reject a memo." };
   }
 
+  const sinceIso = new Date().toISOString();
   const supabase = await createClient();
   const { error } = await supabase.rpc("workflow_reject", {
     p_memo_id: memoId,
@@ -103,6 +122,7 @@ export async function rejectMemo(
   });
 
   if (error) return { error: error.message };
+  await dispatchEmails(memoId, sinceIso);
 
   revalidatePath(`/memos/${memoId}`);
   revalidatePath("/inbox");
@@ -122,6 +142,7 @@ export async function requestChangesMemo(
     return { error: "An explanation is required to request changes." };
   }
 
+  const sinceIso = new Date().toISOString();
   const supabase = await createClient();
   const { error } = await supabase.rpc("workflow_request_changes", {
     p_memo_id: memoId,
@@ -129,6 +150,7 @@ export async function requestChangesMemo(
   });
 
   if (error) return { error: error.message };
+  await dispatchEmails(memoId, sinceIso);
 
   revalidatePath(`/memos/${memoId}`);
   revalidatePath("/inbox");
@@ -138,9 +160,11 @@ export async function requestChangesMemo(
 
 export async function resubmitMemo(memoId: string) {
   await requireProfile();
+  const sinceIso = new Date().toISOString();
   const supabase = await createClient();
   const { error } = await supabase.rpc("resubmit_memo", { p_memo_id: memoId });
   if (error) throw new Error(error.message);
+  await dispatchEmails(memoId, sinceIso);
 
   revalidatePath(`/memos/${memoId}`);
   revalidatePath("/inbox");
@@ -157,6 +181,7 @@ export async function addGeneralComment(
 
   if (!body) return { error: "Comment cannot be empty." };
 
+  const sinceIso = new Date().toISOString();
   const supabase = await createClient();
   const { error } = await supabase.from("comments").insert({
     memo_id: memoId,
@@ -166,6 +191,7 @@ export async function addGeneralComment(
   });
 
   if (error) return { error: error.message };
+  await dispatchEmails(memoId, sinceIso);
 
   revalidatePath(`/memos/${memoId}`);
   return { error: null };

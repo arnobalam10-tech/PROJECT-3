@@ -256,6 +256,15 @@ project). As of this note:
     Needed for PRD §9's "My Memos" `last activity date` column to be meaningful — without this,
     `memos.updated_at` only reflected direct edits to the memo row itself, not workflow actions or
     comments, both of which are obviously "activity."
+18. `20260829071500_019_workflow_assignment_notifications` — **bug fix**, found by systematically
+    auditing Phase 4's existing notification writes against all 8 of PRD §13's trigger types
+    rather than assuming coverage (see `STATUS.md` Phase 6 for the full audit table).
+    `submit_memo` only ever notified the *first* participant ("user assigned to a workflow" +
+    "memo requires action" bundled together); participants 2..N in the initial chain got **no**
+    notification at all until it became their turn. Fixed by having `submit_memo` send
+    `workflow_assignment` to every participant in the chain, and `workflow_approve`
+    (forward-to-someone-new branch) / `workflow_decline_reroute` also send `workflow_assignment`
+    (not just `memo_requires_action`) when adding someone who wasn't previously on the workflow.
 
 ## Notes for Claude Code
 
