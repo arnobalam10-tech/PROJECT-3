@@ -15,6 +15,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <Link href="/dashboard">Dashboard</Link>
           <Link href="/inbox">Inbox</Link>
           <Link href="/memos">My Memos</Link>
+          <Link href="/completed">Completed</Link>
           {profile.role === "org_admin" && (
             <>
               <Link href="/admin/users">Users</Link>

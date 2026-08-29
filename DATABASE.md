@@ -251,6 +251,11 @@ project). As of this note:
     to write to it during the real test run and failed with "relation does not exist." A concrete
     example of why the "actually run it" standard in `STATUS.md` matters more than reviewing the
     SQL by eye.
+17. `20260829070000_018_memo_last_activity_triggers` — `private.touch_memo_updated_at()` +
+    triggers on `workflow_steps`/`comments` (AFTER INSERT/UPDATE) that bump `memos.updated_at`.
+    Needed for PRD §9's "My Memos" `last activity date` column to be meaningful — without this,
+    `memos.updated_at` only reflected direct edits to the memo row itself, not workflow actions or
+    comments, both of which are obviously "activity."
 
 ## Notes for Claude Code
 

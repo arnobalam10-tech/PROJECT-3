@@ -11,10 +11,9 @@ Updated by: Claude Code
 
 ## Current Phase
 
-Phase 4 (Workflow engine) — built against the dynamic, holder-controlled routing model in
-`PRD.md` §7 (not the fixed-sequence version from the original spec PDF), and tested with the
-same evidence-based rigor as Phase 3's rich-text/attachment verification: every claim below is
-backed by an actual query result or a real HTTP call through the real API, not an assumption.
+Phase 5 (Inbox/My Memos/Completed list views) — built and verified with the same evidence
+standard used since Phase 3: authorization-boundary claims backed by script/query results, UI
+rendering confirmed by an actual browser walkthrough.
 
 ## Done ✅
 
@@ -202,6 +201,64 @@ fixed during this walkthrough**: the timeline showed the same comment text twice
 fixed by having step-timeline entries show only the action label, letting the `comments` entries
 own the actual text.
 
+**Phase 5 — Inbox / My Memos / Completed (PRD §9).**
+
+- **`/inbox`**: memos where the caller is the *current* holder (`workflow_steps.status='current'`
+  for their own `assigned_user_id`) — not merely a participant, and not everything they're
+  authorized to see. Columns per spec: number, subject, sender, department, priority, status,
+  submitted date, required action, age. "Required action" is a single constant label
+  ("Review & decide") for every row rather than a differentiated per-step label — deliberate,
+  matching §2.5 item 8's collapse of the Reviewer/Approver step-type distinction; inventing a
+  differentiated label here would quietly reintroduce the thing that clarification removed.
+  Filterable by priority/department, sortable by priority/submitted/age (click column headers,
+  plain query-string state, no client JS framework needed for it).
+- **`/memos` ("My Memos")**: added the two columns PRD §9 requires that Phase 3's version didn't
+  have yet — *current participant* and *last activity date* — both derived live from
+  `workflow_steps`/`memos.updated_at` via the query itself, not stored anywhere. New migration
+  018 makes `memos.updated_at` actually move when a `workflow_steps` row changes or a comment is
+  added (it previously only moved on a direct edit to the memo row), so "last activity" means
+  what it says.
+- **`/completed`** (new route + nav link): memos with a terminal status the caller is authorized
+  to view. Authorization is 100% delegated to the existing `memos_select_authorized` RLS policy
+  from Phase 4 (author/admin/participant) — the page itself only adds the terminal-status filter,
+  it does not layer on any extra visibility logic of its own.
+
+**Rigor requested by the user for this phase specifically: prove the visibility boundary at the
+edges, not just that the lists render.** Two things done, in this order:
+
+1. **Schema-level proof `current_step_position` really is gone and never came back**: queried
+   `information_schema.columns` for `memos` directly — 14 columns, no such field, confirming
+   "who currently holds this" is derived purely from `workflow_steps` everywhere (the `My Memos`
+   query does a live join + client-side `.find(s => s.status === 'current')`, not a lookup against
+   any stored pointer).
+2. **Ephemeral script test, 15/15 checks passed**, using three real signed-in users
+   (Dave = original chain participant, Frank = added mid-chain via forward-to-someone-new i.e.
+   *not* in the original suggested chain, Grace = zero involvement ever) against a real submitted
+   memo:
+   - **Before** Frank was ever added: confirmed by direct query he could not see the memo at all,
+     and did not appear as a current holder.
+   - Dave approved, forwarding to Frank (outside the original chain) — **after**, Frank could now
+     see the memo and correctly appeared as current holder in an Inbox-shaped query.
+   - Grace could not see the memo at any point before this — confirmed again after Frank was
+     added, in case adding someone else accidentally widened visibility for everyone.
+   - Drove the memo to completion (Frank approved with nothing left queued).
+   - **The specific case the user asked to nail down**: with the memo now `approved` (completed),
+     re-queried as Grace — still could not see it, either via a direct `memos` `SELECT` or via a
+     query shaped exactly like the `/completed` page's own query. Being uninvolved doesn't expire
+     or get overridden just because a workflow finished.
+   - Frank and Dave, both *resolved* (non-current) participants, correctly *do* see the completed
+     memo in the same Completed-shaped query.
+   - Re-ran the "My Memos current-participant" query shape before and after completion: before,
+     it correctly resolved to Frank (`status='current'`); after, no row has `status='current'` at
+     all and the derived value is correctly absent — not stale, not defaulting back to someone
+     earlier in the chain.
+   - All test data (memo, 3 users) and the script deleted immediately after.
+3. **UI walkthrough** (as the user said was sufficient for the rendering-only part, on top of the
+   script-based authorization proof above): created and submitted a real memo, confirmed it
+   rendered correctly in `/inbox` with all required columns and working filters; approved it;
+   confirmed it moved correctly into `/completed` with the right outcome/priority/completed-at.
+   Test memo deleted afterward.
+
 ## In Progress 🚧
 
 - **Invite-user with the service-role key** — the key was added by the user this session, but the
@@ -290,10 +347,8 @@ deleted immediately after the run; both test scripts were deleted, not committed
       that the design pass should be "one dedicated sweep... so it's actually consistent" — but
       calling it out by name here so it isn't quietly forgotten inside that broader phase.
 - [x] ~~Phase 4 — Workflow engine~~ **Done** — see Phase 4 section above.
-- [ ] Phase 5 — Inbox/Outbox/Details/Timeline (the memo detail page already has a timeline; Phase
-      5 is specifically the Inbox/My-Memos/Completed *list* views with the full column/filter/sort
-      spec from PRD §9 — `/inbox` is still the Phase-1 placeholder, `/memos` only shows "my
-      memos", not the inbox-of-things-awaiting-my-action view)
+- [x] ~~Phase 5 — Inbox/My Memos/Completed~~ **Done** — see Phase 5 section above. (Memo details +
+      timeline were already built as part of Phase 4.)
 - [ ] Phase 6 — Notifications (in-app + Resend email) — also add "Relay" branding to the email
       templates once built (PRD's naming instruction covers "emails from Resend" explicitly).
 - [ ] Phase 7 — Search, dashboard, reporting (regular-user search/visibility scope per PRD §2.5
@@ -393,7 +448,7 @@ if needed. New entries below.)*
 - `SUPABASE_SERVICE_ROLE_KEY`: set by the user in `.env.local` and Vercel (confirmed by the user
   directly, never seen in chat). Not yet re-tested against the invite-user flow.
 - Resend: still not configured.
-- Last migration applied: `20260829063100_017_memo_versions`.
+- Last migration applied: `20260829070000_018_memo_last_activity_triggers`.
 - New Storage bucket: `attachments` (private).
 - New tables this session: `workflow_steps`, `comments`, `audit_log`, `notifications`,
   `memo_versions`. New `private.` helper functions: `is_workflow_participant()`,

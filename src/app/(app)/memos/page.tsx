@@ -19,12 +19,27 @@ export default async function MyMemosPage() {
 
   const { data: memos } = await supabase
     .from("memos")
-    .select("id, memo_number, subject, status, priority, created_at, updated_at")
+    .select(
+      "id, memo_number, subject, status, priority, submitted_at, updated_at, workflow_steps(assigned_user_id, status, profiles!workflow_steps_assigned_user_id_fkey(name))",
+    )
     .eq("author_id", profile.id)
     .order("updated_at", { ascending: false });
 
+  type Row = {
+    id: string;
+    memo_number: string;
+    subject: string;
+    status: string;
+    priority: string;
+    submitted_at: string | null;
+    updated_at: string;
+    workflow_steps: { assigned_user_id: string; status: string; profiles: { name: string } | null }[];
+  };
+
+  const rows = (memos ?? []) as unknown as Row[];
+
   return (
-    <main className="mx-auto max-w-4xl">
+    <main className="mx-auto max-w-5xl">
       <div className="mb-8 flex items-center justify-between">
         <h1 className="text-3xl font-bold lowercase tracking-tight">my memos</h1>
         <Link href="/memos/new" className="bg-black px-4 py-2 text-sm font-medium text-white">
@@ -37,37 +52,43 @@ export default async function MyMemosPage() {
             <th className="py-2">Number</th>
             <th className="py-2">Subject</th>
             <th className="py-2">Status</th>
+            <th className="py-2">Current Participant</th>
             <th className="py-2">Priority</th>
-            <th className="py-2">Last activity</th>
+            <th className="py-2">Submitted</th>
+            <th className="py-2">Last Activity</th>
           </tr>
         </thead>
         <tbody>
-          {(memos ?? []).map((m) => (
-            <tr key={m.id} className="border-b border-neutral-300">
-              <td className="py-3 font-mono text-xs">{m.memo_number}</td>
-              <td className="py-3">
-                <Link href={`/memos/${m.id}`} className="font-medium underline">
-                  {m.subject}
-                </Link>
-              </td>
-              <td className="py-3 text-xs font-medium uppercase tracking-wide">
-                {STATUS_LABELS[m.status] ?? m.status}
-              </td>
-              <td className="py-3 text-xs font-medium uppercase tracking-wide">
-                {m.priority === "urgent" ? (
-                  <span className="text-red-700">{m.priority}</span>
-                ) : (
-                  m.priority
-                )}
-              </td>
-              <td className="py-3 text-neutral-600">
-                {new Date(m.updated_at).toLocaleString()}
-              </td>
-            </tr>
-          ))}
-          {(memos ?? []).length === 0 && (
+          {rows.map((m) => {
+            // Derived from workflow_steps, not any stored "current step"
+            // pointer — memos itself has no such column (see DATABASE.md:
+            // "who currently holds this memo" is always a live query).
+            const current = m.workflow_steps?.find((s) => s.status === "current");
+            return (
+              <tr key={m.id} className="border-b border-neutral-300">
+                <td className="py-3 font-mono text-xs">{m.memo_number}</td>
+                <td className="py-3">
+                  <Link href={`/memos/${m.id}`} className="font-medium underline">
+                    {m.subject}
+                  </Link>
+                </td>
+                <td className="py-3 text-xs font-medium uppercase tracking-wide">
+                  {STATUS_LABELS[m.status] ?? m.status}
+                </td>
+                <td className="py-3">{current?.profiles?.name ?? "—"}</td>
+                <td className="py-3 text-xs font-medium uppercase tracking-wide">
+                  {m.priority === "urgent" ? <span className="text-red-700">{m.priority}</span> : m.priority}
+                </td>
+                <td className="py-3 text-neutral-600">
+                  {m.submitted_at ? new Date(m.submitted_at).toLocaleDateString() : "—"}
+                </td>
+                <td className="py-3 text-neutral-600">{new Date(m.updated_at).toLocaleString()}</td>
+              </tr>
+            );
+          })}
+          {rows.length === 0 && (
             <tr>
-              <td colSpan={5} className="py-6 text-center text-neutral-500">
+              <td colSpan={7} className="py-6 text-center text-neutral-500">
                 No memos yet — create your first draft.
               </td>
             </tr>
