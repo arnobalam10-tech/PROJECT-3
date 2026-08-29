@@ -1,5 +1,6 @@
 import { requireOrgAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { logQueryError } from "@/lib/log-query-error";
 import { InviteUserForm } from "./invite-user-form";
 import { UserRowControls } from "./user-row-controls";
 
@@ -7,7 +8,10 @@ export default async function UsersPage() {
   const admin = await requireOrgAdmin();
   const supabase = await createClient();
 
-  const [{ data: users }, { data: departments }] = await Promise.all([
+  const [
+    { data: users, error: usersError },
+    { data: departments, error: departmentsError },
+  ] = await Promise.all([
     supabase
       .from("profiles")
       .select("id, name, email, designation, role, status, department_id, departments(name)")
@@ -20,6 +24,8 @@ export default async function UsersPage() {
       .eq("status", "active")
       .order("name"),
   ]);
+  logQueryError("admin.users", usersError);
+  logQueryError("admin.users.departments", departmentsError);
 
   return (
     <main className="mx-auto max-w-5xl">

@@ -11,8 +11,10 @@ Updated by: Claude Code
 
 ## Current Phase
 
-Phase 7 (Search, dashboard, reporting — PRD §14/§15/§22) — done. One real bug found and fixed
-via actually running the search feature against real data, not by reviewing the query.
+Phase 7 (Search, dashboard, reporting — PRD §14/§15/§22) — done. Since then: a requested audit
+for the same silent-error-swallowing failure shape across every other list/dashboard page, which
+found the gap was **not isolated** — fixed consistently everywhere, see "Post-Phase-7 audit"
+below. Moving into Phase 8 next.
 
 ## Done ✅
 
@@ -446,6 +448,36 @@ error instead of silently treating it as zero results. Re-verified after the fix
 nonsense string that existed only in one memo's body content (nowhere in its subject or number)
 correctly found that memo and no others — proving body-content search, the actual original
 target of this feature, genuinely works now, not just that the error went away.
+
+**Post-Phase-7 audit: is the search bug's failure shape isolated, or systemic?** The user asked
+specifically — don't assume it was a one-off, check every list/dashboard page for the same
+pattern (a Supabase query destructures `data` without `error`; a query failure then renders
+identically to an honest empty/zero result). **It was not isolated.** Grepped every
+`const { data... } = await` and `Promise.all([...])` call site under `src/app` — **every single
+list/dashboard/detail page had this gap**, not just search: `/inbox`, `/memos` (My Memos),
+`/completed`, `/dashboard` (9 separate query sites — the most exposed page, since a silently
+failed admin stats query would show *wrong counts*, not just an empty list), `/admin/reports`,
+`/notifications`, `/admin/departments`, `/admin/users`, `/memos/[id]` (7 query sites — the memo
+detail/timeline page), `/memos/new`, and `/search`'s own supporting dropdown queries (the main
+results query was already fixed as part of the Phase 7 bug fix, but the department/category/
+author dropdown queries on that same page still weren't checked).
+
+Fixed identically everywhere — no case-by-case judgment calls, since the risk and the fix are the
+same regardless of which page: added `src/lib/log-query-error.ts` (a 5-line shared
+`logQueryError(context, error)` helper) and called it after every read query across all 11 files
+above (~30 individual query sites). This doesn't change what renders when there's *no* error —
+every page's behavior with healthy queries is byte-for-byte the same as before — it only makes a
+*future* query failure visible in the server logs instead of silently indistinguishable from a
+real empty state, exactly the class of bug that let the search issue hide.
+
+**Verified this didn't introduce a regression**, not just that it compiles: full `next build` +
+`eslint` clean, then a live regression pass through every touched page against real data
+(dashboard, inbox, my memos, completed, admin departments, admin users, notifications, search,
+memos/new, and a memo detail page covering all 7 of its query sites) — confirmed each still
+renders exactly as before, and confirmed via the dev server logs that zero `[... query failed]`
+entries fired during normal use (i.e., this audit didn't uncover a *second* live bug hiding
+behind the same pattern — the search jsonb/ilike issue was the only query that was actually
+broken; every other query site was healthy, just unguarded against a *future* failure).
 
 ## In Progress 🚧
 

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { logQueryError } from "@/lib/log-query-error";
 import { MarkReadButton } from "./mark-read-button";
 import { markAllNotificationsRead } from "./actions";
 
@@ -22,11 +23,12 @@ export default async function NotificationsPage() {
   // own rows — there is no organization- or admin-level broadening here,
   // unlike memos. A user's notifications are never visible to anyone else,
   // including another admin in the same org.
-  const { data: notifications } = await supabase
+  const { data: notifications, error: notificationsError } = await supabase
     .from("notifications")
     .select("id, type, message, memo_id, is_read, created_at")
     .eq("user_id", profile.id)
     .order("created_at", { ascending: false });
+  logQueryError("notifications.notifications", notificationsError);
 
   const items = notifications ?? [];
   const unreadCount = items.filter((n) => !n.is_read).length;

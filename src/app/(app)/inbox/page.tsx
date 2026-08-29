@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { logQueryError } from "@/lib/log-query-error";
 
 type SortKey = "submitted_at" | "priority" | "age";
 
@@ -24,11 +25,12 @@ export default async function InboxPage({
   const sort: SortKey = (params.sort as SortKey) ?? "age";
   const dir: "asc" | "desc" = params.dir === "desc" ? "desc" : "asc";
 
-  const { data: departments } = await supabase
+  const { data: departments, error: departmentsError } = await supabase
     .from("departments")
     .select("id, name")
     .eq("organization_id", profile.organization_id)
     .order("name");
+  logQueryError("inbox.departments", departmentsError);
 
   let query = supabase
     .from("workflow_steps")
@@ -45,7 +47,8 @@ export default async function InboxPage({
     query = query.eq("memos.department_id", params.department);
   }
 
-  const { data: rows } = await query;
+  const { data: rows, error: rowsError } = await query;
+  logQueryError("inbox.workflow_steps", rowsError);
 
   type Row = {
     id: string;

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { logQueryError } from "@/lib/log-query-error";
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "Draft",
@@ -17,13 +18,14 @@ export default async function MyMemosPage() {
   const profile = await requireProfile();
   const supabase = await createClient();
 
-  const { data: memos } = await supabase
+  const { data: memos, error: memosError } = await supabase
     .from("memos")
     .select(
       "id, memo_number, subject, status, priority, submitted_at, updated_at, workflow_steps(assigned_user_id, status, profiles!workflow_steps_assigned_user_id_fkey(name))",
     )
     .eq("author_id", profile.id)
     .order("updated_at", { ascending: false });
+  logQueryError("my-memos.memos", memosError);
 
   type Row = {
     id: string;

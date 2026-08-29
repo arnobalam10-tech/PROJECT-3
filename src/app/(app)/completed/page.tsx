@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { logQueryError } from "@/lib/log-query-error";
 
 const STATUS_LABELS: Record<string, string> = {
   approved: "Approved",
@@ -16,13 +17,14 @@ export default async function CompletedPage() {
   // authored, was ever a workflow participant on, or — if org_admin — any
   // memo in the org. No extra filtering needed for authorization; the
   // .in() below only narrows to terminal statuses.
-  const { data: memos } = await supabase
+  const { data: memos, error: memosError } = await supabase
     .from("memos")
     .select(
       "id, memo_number, subject, status, priority, author_id, completed_at, profiles!memos_author_id_fkey(name)",
     )
     .in("status", ["approved", "rejected", "cancelled"])
     .order("completed_at", { ascending: false });
+  logQueryError("completed.memos", memosError);
 
   type Row = {
     id: string;

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { logQueryError } from "@/lib/log-query-error";
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "Draft",
@@ -33,11 +34,18 @@ export default async function SearchPage({
   const supabase = await createClient();
   const params = await searchParams;
 
-  const [{ data: departments }, { data: categories }, { data: members }] = await Promise.all([
+  const [
+    { data: departments, error: departmentsError },
+    { data: categories, error: categoriesError },
+    { data: members, error: membersError },
+  ] = await Promise.all([
     supabase.from("departments").select("id, name").eq("organization_id", profile.organization_id).order("name"),
     supabase.from("memo_categories").select("id, name").eq("organization_id", profile.organization_id).order("name"),
     supabase.from("profiles").select("id, name").eq("organization_id", profile.organization_id).order("name"),
   ]);
+  logQueryError("search.departments", departmentsError);
+  logQueryError("search.categories", categoriesError);
+  logQueryError("search.members", membersError);
 
   const hasAnyFilter = Object.values(params).some((v) => v && v.length > 0);
 

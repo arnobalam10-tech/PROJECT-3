@@ -1,5 +1,6 @@
 import { requireOrgAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { logQueryError } from "@/lib/log-query-error";
 import { NewDepartmentForm } from "./new-department-form";
 import { toggleDepartmentStatus } from "./actions";
 
@@ -7,11 +8,12 @@ export default async function DepartmentsPage() {
   const admin = await requireOrgAdmin();
   const supabase = await createClient();
 
-  const { data: departments } = await supabase
+  const { data: departments, error: departmentsError } = await supabase
     .from("departments")
     .select("id, name, description, status")
     .eq("organization_id", admin.organization_id)
     .order("name");
+  logQueryError("admin.departments", departmentsError);
 
   return (
     <main className="mx-auto max-w-3xl">

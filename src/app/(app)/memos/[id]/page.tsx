@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { logQueryError } from "@/lib/log-query-error";
 import { RichTextEditor } from "@/components/rich-text-editor";
 import { MemoForm } from "../memo-form";
 import { AttachmentUpload } from "./attachment-upload";
@@ -35,13 +36,14 @@ export default async function MemoDetailPage({ params }: { params: Promise<{ id:
   const profile = await requireProfile();
   const supabase = await createClient();
 
-  const { data: memo } = await supabase
+  const { data: memo, error: memoError } = await supabase
     .from("memos")
     .select(
       "id, memo_number, subject, body, status, priority, department_id, category_id, author_id, created_at, updated_at, profiles!memos_author_id_fkey(name)",
     )
     .eq("id", id)
     .maybeSingle();
+  logQueryError("memo-detail.memo", memoError);
 
   if (!memo) {
     notFound();
@@ -52,8 +54,14 @@ export default async function MemoDetailPage({ params }: { params: Promise<{ id:
   const isEditable = isDraftEditable || isChangesRequestedEditable;
   const authorName = (memo.profiles as unknown as { name: string } | null)?.name;
 
-  const [{ data: departments }, { data: categories }, { data: attachments }, { data: members }, { data: steps }, { data: comments }] =
-    await Promise.all([
+  const [
+    { data: departments, error: departmentsError },
+    { data: categories, error: categoriesError },
+    { data: attachments, error: attachmentsError },
+    { data: members, error: membersError },
+    { data: steps, error: stepsError },
+    { data: comments, error: commentsError },
+  ] = await Promise.all([
       supabase.from("departments").select("id, name").eq("organization_id", profile.organization_id).eq("status", "active").order("name"),
       supabase.from("memo_categories").select("id, name").eq("organization_id", profile.organization_id).eq("is_active", true).order("name"),
       supabase.from("attachments").select("id, file_name, file_size, uploaded_at").eq("memo_id", id).order("uploaded_at"),
@@ -69,6 +77,12 @@ export default async function MemoDetailPage({ params }: { params: Promise<{ id:
         .eq("memo_id", id)
         .order("created_at"),
     ]);
+  logQueryError("memo-detail.departments", departmentsError);
+  logQueryError("memo-detail.categories", categoriesError);
+  logQueryError("memo-detail.attachments", attachmentsError);
+  logQueryError("memo-detail.members", membersError);
+  logQueryError("memo-detail.steps", stepsError);
+  logQueryError("memo-detail.comments", commentsError);
 
   const currentStep = (steps ?? []).find((s) => s.status === "current");
   const isCurrentHolder = currentStep?.assigned_user_id === profile.id;

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { logQueryError } from "@/lib/log-query-error";
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "Draft",
@@ -17,14 +18,19 @@ export default async function DashboardPage() {
   const profile = await requireProfile();
   const supabase = await createClient();
 
-  const { data: org } = await supabase
+  const { data: org, error: orgError } = await supabase
     .from("organizations")
     .select("name")
     .eq("id", profile.organization_id)
     .maybeSingle();
+  logQueryError("dashboard.org", orgError);
 
   // ---- Regular-user data (also visible to admins about themselves) ----
-  const [{ data: inboxSteps }, { data: myMemos }, { data: recentNotifs }] = await Promise.all([
+  const [
+    { data: inboxSteps, error: inboxStepsError },
+    { data: myMemos, error: myMemosError },
+    { data: recentNotifs, error: recentNotifsError },
+  ] = await Promise.all([
     supabase
       .from("workflow_steps")
       .select("id, memos!inner(priority)")
@@ -42,6 +48,9 @@ export default async function DashboardPage() {
       .order("created_at", { ascending: false })
       .limit(5),
   ]);
+  logQueryError("dashboard.inboxSteps", inboxStepsError);
+  logQueryError("dashboard.myMemos", myMemosError);
+  logQueryError("dashboard.recentNotifs", recentNotifsError);
 
   const inboxCount = inboxSteps?.length ?? 0;
   const urgentInboxCount = (inboxSteps ?? []).filter(
@@ -71,11 +80,11 @@ export default async function DashboardPage() {
 
   if (profile.role === "org_admin") {
     const [
-      { count: userCount },
-      { count: activeUserCount },
-      { count: departmentCount },
-      { data: orgMemos },
-      { data: activity },
+      { count: userCount, error: userCountError },
+      { count: activeUserCount, error: activeUserCountError },
+      { count: departmentCount, error: departmentCountError },
+      { data: orgMemos, error: orgMemosError },
+      { data: activity, error: activityError },
     ] = await Promise.all([
       supabase.from("profiles").select("id", { count: "exact", head: true }).eq("organization_id", profile.organization_id),
       supabase
@@ -92,6 +101,11 @@ export default async function DashboardPage() {
         .order("created_at", { ascending: false })
         .limit(8),
     ]);
+    logQueryError("dashboard.admin.userCount", userCountError);
+    logQueryError("dashboard.admin.activeUserCount", activeUserCountError);
+    logQueryError("dashboard.admin.departmentCount", departmentCountError);
+    logQueryError("dashboard.admin.orgMemos", orgMemosError);
+    logQueryError("dashboard.admin.activity", activityError);
 
     const rows = orgMemos ?? [];
     adminStats = {

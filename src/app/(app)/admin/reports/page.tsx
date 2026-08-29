@@ -1,5 +1,6 @@
 import { requireOrgAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { logQueryError } from "@/lib/log-query-error";
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "Draft",
@@ -28,10 +29,15 @@ export default async function ReportsPage({
   const supabase = await createClient();
   const params = await searchParams;
 
-  const [{ data: departments }, { data: categories }] = await Promise.all([
+  const [
+    { data: departments, error: departmentsError },
+    { data: categories, error: categoriesError },
+  ] = await Promise.all([
     supabase.from("departments").select("id, name").eq("organization_id", admin.organization_id).order("name"),
     supabase.from("memo_categories").select("id, name").eq("organization_id", admin.organization_id).order("name"),
   ]);
+  logQueryError("reports.departments", departmentsError);
+  logQueryError("reports.categories", categoriesError);
   const deptNameById = new Map((departments ?? []).map((d) => [d.id, d.name]));
   const catNameById = new Map((categories ?? []).map((c) => [c.id, c.name]));
 
@@ -46,7 +52,8 @@ export default async function ReportsPage({
   if (params.category) query = query.eq("category_id", params.category);
   if (params.status) query = query.eq("status", params.status);
 
-  const { data: memos } = await query;
+  const { data: memos, error: memosError } = await query;
+  logQueryError("reports.memos", memosError);
   const rows = memos ?? [];
 
   const byStatus = new Map<string, number>();
