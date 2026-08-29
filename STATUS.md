@@ -4,8 +4,90 @@
 rules. It is the source of truth for "what's the current state of the project" — more reliable
 than memory of prior sessions. Be precise and honest; "mostly done" is not an acceptable status.
 
-Last updated: 2026-08-29 (Phases 11/12/13 session)
+Last updated: 2026-08-29 (post-submission bugfix session)
 Updated by: Claude Code
+
+---
+
+## Post-submission bugfix session — profile-menu navigation + change password
+
+Two issues reported by the user after finding them on the **deployed** app, both reproduced live
+on the production Vercel URL before any fix was written (not just locally), and both re-verified
+on production again after the fix redeployed — per the user's explicit instruction, given this
+project has already hit dev-vs-prod discrepancies once (the rich-text hydration timing case).
+
+### Bug 1 — Profile menu completely dead in production [FIXED]
+
+- **Reproduced on the live Vercel URL first**: signed in as a real seeded user
+  (`sarah@relaydemo.local`), clicked the avatar/user-menu button in the top bar — nothing
+  happened, no dropdown opened. `document.elementFromPoint` confirmed the click was landing on the
+  right element; the dropdown simply never rendered.
+- **Root cause, found via the browser console, not guessed**: `Base UI error #31` was thrown the
+  instant the dropdown trigger was clicked — production React strips error text down to a numeric
+  code for bundle size, so the code alone wasn't enough. Reproduced the same click against the
+  **local dev server**, where React keeps the full message: `Base UI: MenuGroupContext is missing.
+  Menu group parts must be used within <Menu.Group> or <Menu.RadioGroup>.` `src/app/(app)/
+  user-menu.tsx` rendered `DropdownMenuLabel` (which wraps Base UI's `Menu.GroupLabel`, a component
+  that reads a group context that only exists inside a `Menu.Group`) directly inside
+  `DropdownMenuContent`, with no `DropdownMenuGroup` wrapper — so the popup's own render crashed
+  before anything could open. This is the same class of Radix-vs-Base-UI API surprise this project
+  has hit repeatedly since the v2 design pass (`asChild` vs `render`, `Button`'s `nativeButton`);
+  Base UI's `GroupLabel` has no equivalent in Radix that requires this wrapper, so nothing about
+  this would have looked wrong by inspection alone.
+- **Why this slipped through the Phase 10 v2 QA sweep**: that sweep confirmed the dropdown's
+  *trigger* had no console errors and confirmed navigation worked for every *page* reached by
+  direct URL/sidebar link, but never actually clicked this specific dropdown open and confirmed
+  its *contents* rendered — the one interaction this bug lived in.
+- **Grepped the whole codebase for the same pattern**: `DropdownMenuLabel` has exactly one
+  consumer, `user-menu.tsx` — not a systemic issue elsewhere.
+- **Fix**: wrapped the label in `DropdownMenuGroup` (`src/app/(app)/user-menu.tsx`).
+- **Verified on a genuinely fresh browser tab against the live production URL** (not the same tab
+  used to reproduce the bug, to rule out a stale console-message buffer — this project already
+  learned that lesson once this session): zero console errors, the dropdown opens, the Profile
+  link is present with the correct `href`, and clicking it actually lands on `/profile` rendering
+  the signed-in user's real data. Also incidentally confirmed "Sign out" in the same menu works.
+
+### Bug 2 — No change-password feature [FIXED]
+
+- **Checked before building, not assumed**: `grep -rniE "change.?password|updatePassword|reset.?
+  password"` across `src/` returned zero matches — confirmed this genuinely didn't exist anywhere,
+  not even a forgot-password flow, despite being an explicit requirement (`PRD.md` §4).
+- **Built**: `changePassword` server action (`src/app/(app)/profile/actions.ts`) +
+  `ChangePasswordForm` (`src/app/(app)/profile/change-password-form.tsx`), added to `/profile`.
+  Validates the new password is ≥8 characters, matches its confirmation, and differs from the
+  current password.
+- **Requires the current password before allowing a change**, per the user's explicit instruction
+  not to let an already-authenticated session change the password with zero friction: since
+  Supabase's client SDK has no standalone "verify this password without starting a session" call,
+  the server action re-runs `supabase.auth.signInWithPassword()` with the caller's own email and
+  the submitted *current* password first — if that fails, the change is rejected with "Current
+  password is incorrect." before `auth.updateUser({ password })` is ever called.
+- **Session-invalidation behavior confirmed empirically, not assumed**, using a real two-session
+  Node script (an ephemeral test user, two independent signed-in `@supabase/supabase-js` clients
+  simulating two devices):
+  - A **second, untouched session's refresh token**, used *after* the password change on the
+    first session: **rejected** — `Invalid Refresh Token: Refresh Token Not Found`. Supabase Auth
+    does automatically revoke other outstanding sessions' refresh tokens on a password change.
+  - The **first session's own pre-change access token** (the short-lived JWT already issued),
+    replayed directly against the REST API *after* the change: **still valid** until its own
+    natural expiry (~1 hour). This is standard stateless-JWT behavior (verified locally by
+    signature/expiry, not checked against a revocation list per-request), not a gap specific to
+    this app or something Supabase treats differently for a password change specifically.
+- **Verified end-to-end via the real browser UI, both locally and on the live production URL**,
+  using fresh ephemeral test accounts (never the real demo credentials) so nothing in the seeded
+  Phase 11 demo data was disturbed:
+  1. Submitting with a wrong current password → real UI shows "Current password is incorrect.",
+     nothing changes.
+  2. Submitting with the correct current password + a valid new password → "Password updated."
+  3. Signed out via the real "Sign out" menu item, signed back in with the **old** password →
+     rejected ("Invalid email or password.").
+  4. Signed in with the **new** password → succeeds, lands on the real dashboard.
+  All 4 steps repeated identically against `https://relay-cyan-alpha.vercel.app` after the fix
+  redeployed, not just locally. Test accounts and all their data deleted immediately after; a
+  final count confirmed exactly the 7 real demo users remain, nothing extra left behind.
+
+**Committed as `f7c80af`, pushed, redeployed, and re-verified against the live URL** — both fixes
+are live in production, not just committed.
 
 ---
 
@@ -1630,13 +1712,20 @@ deleted immediately after the run; both test scripts were deleted, not committed
 
 ## Known Bugs / Issues
 
-- **[OPEN, found Phase 10, queued for Phase 12] `profiles_update_self` RLS policy has no column
-  restriction** — a regular user can self-update any column on their own `profiles` row via a
-  direct API call, including `role` (self-promotion to `org_admin`), `organization_id`, and
-  `status`, since the policy's `using (id = auth.uid())` has no `with check` narrowing which
-  fields may change. Pre-dates every phase since migration 001 (Phase 1); not a regression from
-  building `/profile` in Phase 10, just newly noticed while doing so. See Phase 10's section and
-  the Phase 12 checklist item above for the fix approach.
+- **[FIXED, Phase 12] `profiles_update_self` RLS policy had no column restriction** — a regular
+  user could self-update any column on their own `profiles` row via a direct API call, including
+  `role` (self-promotion to `org_admin`), `organization_id`, and `status`. First noticed in Phase
+  10 while building `/profile`, fixed in Phase 12 with a `BEFORE UPDATE` trigger (migration 027).
+  13/13 checks passed. See the Phase 12 findings log above for the full write-up.
+- **[FIXED, post-submission bugfix session] User-menu dropdown (Profile/Sign out) was completely
+  dead in production** — `DropdownMenuLabel` used without a `DropdownMenuGroup` wrapper crashed
+  Base UI's popup render (`MenuGroupContext is missing`) the instant the trigger was clicked.
+  Reproduced live on Vercel first, fixed, re-verified on Vercel after redeploy. See the dedicated
+  section near the top of this file for the full write-up.
+- **[FIXED, post-submission bugfix session] No change-password feature existed** — PRD §4 requires
+  it; confirmed via grep it was never built. Added, requiring the current password before allowing
+  a change. See the dedicated section near the top of this file for the full write-up, including
+  the empirical session-invalidation findings.
 - **[FIXED, prior session] Self-referential RLS policy** — see `DATABASE.md`'s "Tenant isolation
   pattern" section for the full writeup; this is now the canonical documented pattern
   (`private.current_organization_id()` / `private.current_role()`).
