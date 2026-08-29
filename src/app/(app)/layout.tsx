@@ -9,6 +9,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <div className="min-h-screen">
       <header className="flex items-center justify-between border-b-[3px] border-black px-6 py-3">
         <nav className="flex items-center gap-6 text-xs font-medium uppercase tracking-wide">
+          <Link href="/dashboard" className="text-sm font-bold lowercase tracking-tight">
+            relay
+          </Link>
           <Link href="/dashboard">Dashboard</Link>
           <Link href="/inbox">Inbox</Link>
           <Link href="/memos">My Memos</Link>

@@ -12,6 +12,9 @@ export default function SignupPage() {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6 py-12">
+      <Link href="/" className="mb-8 block text-sm font-bold lowercase tracking-tight">
+        relay
+      </Link>
       <h1 className="mb-2 text-3xl font-bold lowercase tracking-tight">create your organization</h1>
       <p className="mb-8 text-sm text-neutral-600">
         This creates a new organization and signs you in as its admin.

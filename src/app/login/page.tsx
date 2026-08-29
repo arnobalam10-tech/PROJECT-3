@@ -9,6 +9,9 @@ export default function LoginPage() {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6">
+      <Link href="/" className="mb-8 block text-sm font-bold lowercase tracking-tight">
+        relay
+      </Link>
       <h1 className="mb-8 text-3xl font-bold lowercase tracking-tight">sign in</h1>
       <form action={formAction} className="flex flex-col gap-4">
         <label className="flex flex-col gap-1">

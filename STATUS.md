@@ -4,199 +4,213 @@
 rules. It is the source of truth for "what's the current state of the project" — more reliable
 than memory of prior sessions. Be precise and honest; "mostly done" is not an acceptable status.
 
-Last updated: 2026-08-29 (Phase 1 + Phase 2 build session)
+Last updated: 2026-08-29 (Phase 2 checks + Phase 3 build session)
 Updated by: Claude Code
 
 ---
 
 ## Current Phase
 
-Phase 2 (Orgs, users, departments, roles) — core admin functionality built and verified locally
-against the real dev server + real Supabase project. GitHub repo created and pushed. Vercel
-deploy handed off to the user (see In Progress).
+Phase 3 (Memo core) — draft CRUD, categories, priorities, and attachments built and verified
+locally and (partially) in production. Deployed and live on Vercel.
 
 ## Done ✅
 
-**Phase 1 — Foundation**
-- Next.js 16 (App Router, TypeScript, Tailwind) scaffolded at repo root.
-- Supabase project created: `nsu-memo-system` (ref `gzevdosekfffippelxmi`, region ap-northeast-1,
-  free tier, $0/month).
-- Supabase client helpers (`src/lib/supabase/{client,server,middleware}.ts`), session-refresh +
-  route-protection proxy (`src/proxy.ts` — Next 16 renamed `middleware.ts` → `proxy.ts`, migrated).
-- Auth pages: `/` (landing), `/signup` (org bootstrap), `/login`, `/auth/callback`
-  (email-confirmation-link handler), `/dashboard`.
-- GitHub repo created by the user: https://github.com/arnobalam10-tech/PROJECT-3 (private).
-  First commit pushed (`da6406a`).
-- `npm run build` passes clean, no TS errors.
+**Phase 1 — Foundation.** Next.js 16 + Supabase (Auth/Postgres/RLS) + Tailwind, GitHub repo
+(https://github.com/arnobalam10-tech/PROJECT-3, private), Vercel deploy live at
+**https://relay-cyan-alpha.vercel.app/** (confirmed working end-to-end in production this
+session — landing page, login, and a real authenticated dashboard load all verified live, not
+just locally).
 
-**Phase 2 — Orgs, users, departments, roles**
-- `requireProfile()` / `requireOrgAdmin()` auth helpers (`src/lib/auth.ts`) — every admin page and
-  every mutating server action calls one of these; RLS is never the only line of defense (per
-  `CLAUDE.md` §4).
-- Shared authenticated app shell: `src/app/(app)/layout.tsx` — role-gated nav (Users/Departments
-  links only render for `org_admin`), sign-out. `/dashboard`, `/inbox` (placeholder), `/memos`
-  (placeholder), `/admin/departments`, `/admin/users` all live under this route group.
-- **Departments** (`/admin/departments`): create, list, activate/deactivate. Every mutation
-  derives `organization_id` from the server-side admin profile, never from client input; every
-  mutation re-verifies the target row's `organization_id` matches the caller's org before writing
-  (belt-and-suspenders on top of RLS).
-- **Users** (`/admin/users`): list org members; invite new users (via Supabase Auth Admin API —
-  see Decisions Log for why this needs the service-role key); change role/department/active
-  status per user. Self-lockout guards: an admin can't change their own role or deactivate
-  themselves (controls are disabled in the UI *and* the server actions no-op/reject it — not just
-  hidden buttons).
-- Migrations 3–5 (see `DATABASE.md` "Migrations applied so far" for full detail):
-  - `003_departments` — `departments` table + RLS, backfills deferred `profiles.department_id` FK.
-  - `004_fix_rls_self_reference` / `005_fix_helper_function_grants` — **real bug, found and fixed
-    this session**, see Known Bugs/Issues below. This is now the documented canonical pattern in
-    `DATABASE.md`.
-- `src/lib/supabase/admin.ts` — service-role client, used only by the invite-user server action,
-  never imported anywhere client-reachable.
-- Manually tested end-to-end in the real browser against the real dev server + real Supabase
-  project (not just read the code and assumed): dashboard render, department create, department
-  deactivate/reactivate (confirmed via DB round-trip, not just UI optimism), user invite
-  (confirmed it fails cleanly with an actionable error when `SUPABASE_SERVICE_ROLE_KEY` is unset,
-  rather than crashing or leaking a stack trace — satisfies PRD §24.13 as a side effect).
-- `npm run build` passes clean after all Phase 2 additions.
+**Phase 2 — Orgs, users, departments, roles.** Department CRUD, admin user management
+(invite/role/department/status), role-gated nav, `requireProfile()`/`requireOrgAdmin()` used
+everywhere. `SUPABASE_SERVICE_ROLE_KEY` added by the user directly to `.env.local` and Vercel
+(never passed through chat) — invite-user is now expected to actually work, not just fail
+cleanly, though it hasn't been re-tested since the key was added (see In Progress).
+
+**Post-Phase-2 checks requested by the user, both done:**
+1. **Rebrand to "Relay"** applied everywhere generic: `<title>`/meta description
+   (`src/app/layout.tsx`), landing page headline + copy (`src/app/page.tsx`), a small "relay"
+   wordmark added to `/login`, `/signup`, and the authenticated app shell's nav
+   (`src/app/(app)/layout.tsx` — it had no brand element at all before), and `README.md`'s title.
+   The full Swiss/Basel landing-page treatment from PRD §25 is intentionally **not** done yet —
+   see "Landing page (PRD §25)" in Not Started Yet below.
+2. **Org onboarding vs. PRD §3.1 — confirmed matching, no changes needed.** Re-read §3.1
+   line-by-line against `/signup` (`src/app/signup/actions.ts` + the `create_organization_with_admin`
+   RPC): self-serve public signup, signer provides their own name/email/password + the org name,
+   slug is derived (not chosen — §3.1 allows either), `organizations` + `profiles`
+   (`role = org_admin`) are created together, no invite or platform-admin step required. This was
+   already built this way in Phase 1/2 before the instructor clarification existed in the docs —
+   it happened to already match. Confirmed by re-reading the code, not just by memory.
+
+**Reconciled `DATABASE.md` after the instructor-clarification rewrite.** The user's edit to
+`DATABASE.md` (applying `PRD.md` §2.5's instructor clarifications) was based on an earlier version
+of the file than the one this session had already corrected — it silently reverted the
+"Tenant isolation pattern" section back to the broken self-referential-subquery example, and
+dropped the "Migrations applied so far" log entirely. **Flagged to the user rather than silently
+overwritten** (per this session's own operating instructions): re-applied the `private` schema
+fix and rebuilt the migrations log on top of the new instructor-driven content, so both are now
+present and accurate. See `DATABASE.md` for the merged result.
+
+**`organizations.created_by`** — added (migration 006) per the schema shown in the updated
+`DATABASE.md`; bootstrap RPC updated to set it (insert org → insert profile → backfill, since the
+FK can't be satisfied before the profile row exists).
+
+**Phase 3 — Memo core:**
+- `memo_categories` table + RLS; bootstrap RPC now seeds the 7 default categories (PRD §6.1:
+  Administrative, Financial, Procurement, HR, Academic, Technical, General) into every new org.
+  Backfilled onto the existing test org too.
+- `memos` table (no `current_step_position` — matches the new dynamic-routing schema in
+  `DATABASE.md`, which derives "who currently holds this" from `workflow_steps` once that exists
+  in Phase 4), `memo_priority`/`memo_status` enums, atomic per-org `memo_number` generation
+  (`generate_memo_number()`, format `<ORGSLUG>-<YYYY>-#####`, uses
+  `insert ... on conflict do update` on a dedicated counter table for correctness under
+  concurrency — no lost/duplicate numbers even if two users submit at once).
+- `attachments` table + private `attachments` Storage bucket + `storage.objects` RLS policies
+  keyed off the memo the file belongs to (path = `<memo_id>/<uuid>-<filename>`). No public URLs;
+  downloads go through a server action that mints a 60-second signed URL after an authorization
+  check.
+- Memo creation/edit form (`/memos/new`, `/memos/[id]`) with a Tiptap rich-text editor (bold,
+  italic, bullet/numbered lists, links — matches PRD §6.1's "basic rich text" minimum), subject,
+  department/category/priority selects (validated server-side against the caller's own org, not
+  trusted from the client). Draft-only for now — no Submit button yet, since submission requires
+  an initial participant chain, which is Phase 4 territory (see Decisions Log).
+- Draft edit/delete restricted to the author while `status = 'draft'`, enforced in both RLS and
+  the server actions (`assertOwnedDraft()`), matching PRD §6.2.
+- File upload: 10MB max, blocklist on common executable extensions, both enforced server-side
+  (PRD §12, §24.11) — not just via the file picker's `accept` attribute.
+- `/memos` ("My Memos") now lists the real data instead of the Phase-1 placeholder.
+- **Manually tested end-to-end in the real browser against the real dev server + real Supabase
+  project**: created a memo, applied bold formatting, saved, navigated away and back (confirmed
+  the formatting persisted correctly in the DB and re-rendered — this surfaced and ruled out what
+  first looked like a rendering bug but was actually just Tiptap's client hydration timing, not a
+  real defect), verified the memo-number counter incremented correctly across two memos, and
+  fully exercised delete (see the delete-button bug/fix below).
+- **Bug found and fixed this session:** the delete-draft button used the browser's native
+  `window.confirm()`. Browser automation tools can't interact with native JS confirm dialogs, so
+  this was untestable by anything other than a human clicking it — and it also doesn't fit the
+  Swiss/Basel design system (an unstyled native browser popup). Replaced with an in-app two-step
+  confirm (`src/app/(app)/memos/[id]/delete-draft-button.tsx`: click "delete draft" → button
+  becomes "confirm delete" / "cancel"). Re-tested after the fix: works correctly, verified the row
+  was actually gone from the DB afterward, not just that the UI navigated away.
 
 ## In Progress 🚧
 
-- **Vercel deploy** — handed off to the user (no `vercel`/`gh` CLI available in this environment,
-  and account login is inherently interactive). User is deploying via vercel.com/new import of
-  the GitHub repo. Not yet confirmed live; no deployed URL recorded yet. **Next session: ask the
-  user for the URL, or check if it's already been done, before starting Phase 3.**
-- **`SUPABASE_SERVICE_ROLE_KEY`** — required for the invite-user feature to actually work (beyond
-  failing cleanly, which is already verified). Deliberately not set by Claude Code — this key
-  must never pass through the chat transcript, since that transcript is itself part of the graded
-  submission (see `CLAUDE.md` §1). The user needs to add it directly to `.env.local` and to
-  Vercel's server env vars themselves, from Supabase dashboard → Project Settings → API →
-  service_role secret. **Not yet done as of this note** — invite-user is untested beyond the
-  clean-failure path.
+- **Attachment upload/download — not yet exercised through the browser UI.** The Browser-pane
+  automation tool available in this session has no file-picker/file-input capability, and the
+  `claude-in-chrome` tool (which does support file uploads) reported "not connected" when tried.
+  What *is* verified: the private bucket exists, `storage.objects` RLS policies apply cleanly with
+  no advisor warnings, and the upload/download/delete server actions mirror the same
+  ownership-check pattern already proven correct elsewhere (`assertOwnedDraft`, signed URLs scoped
+  per-request). Still, this is a real gap — **next session (or the user, right now) should
+  actually upload and download a file through the UI** before Phase 3 is called fully done.
+- **Invite-user with the service-role key** — the key was added by the user this session, but the
+  invite flow hasn't been re-tested since (last confirmed behavior was the clean-failure path
+  before the key existed). Worth a quick real test soon.
+- Vercel deploy currently reflects the Phase 2 commit (`f791a0f`) — this session's Relay rebrand
+  and Phase 3 work are committed locally and about to be pushed; Vercel should auto-redeploy on
+  push (GitHub integration), but that hasn't been confirmed yet as of this note.
 
 ## Not Started Yet
 
-- [ ] Phase 3 — Memo core (creation, drafts, categories, attachments)
-- [ ] Phase 4 — Workflow engine
+- [ ] **Landing page (PRD §25)** — explicitly flagged by the user to track "before final polish."
+      Current `/` has Relay branding and correct copy but is plain Tailwind, not the full
+      Swiss/Basel hero treatment (large black band, giant lowercase wordmark, single red accent,
+      dropping into the 3-column grid below the fold) the PRD calls for. Placing this inside
+      **Phase 10 (Design pass)** rather than as a one-off now, per PRD §26's explicit instruction
+      that the design pass should be "one dedicated sweep... so it's actually consistent" — but
+      calling it out by name here so it isn't quietly forgotten inside that broader phase.
+- [ ] Phase 4 — Workflow engine. **Must be built against the new dynamic, holder-controlled
+      routing model in `PRD.md` §7 and the redesigned `workflow_steps` table in `DATABASE.md`**
+      (queued/current/approved/rejected/changes_requested/declined/skipped, `is_original`/
+      `added_by` for tracking deviations from the suggested chain) — there is no old
+      fixed-sequence version deployed yet, so there's nothing to migrate away from. Also needs:
+      widening the Phase-3 `memos` SELECT policy to match PRD §14 (regular users see memos they
+      authored **or were/are a participant in**, not just authored — this was deliberately scoped
+      down for Phase 3 since `workflow_steps` didn't exist yet).
 - [ ] Phase 5 — Inbox/Outbox/Details/Timeline
-- [ ] Phase 6 — Notifications (in-app + Resend email)
-- [ ] Phase 7 — Search, dashboard, reporting
+- [ ] Phase 6 — Notifications (in-app + Resend email) — also add "Relay" branding to the email
+      templates once built (PRD's naming instruction covers "emails from Resend" explicitly).
+- [ ] Phase 7 — Search, dashboard, reporting (regular-user search/visibility scope per PRD §2.5
+      item 7 / §14 — narrower than org-wide, ties into the same `workflow_steps`-based visibility
+      widening as Phase 4)
 - [ ] Phase 8 — Templates, delegation, versioning, audit log
 - [ ] Phase 9 — PDF export
-- [ ] Phase 10 — Design pass (Swiss system applied consistently — Phase 1/2 UI is intentionally
-      plain Tailwind, per PRD §26's "working end-to-end, even if unstyled" instruction; do the
-      real Swiss/Basel pass as one dedicated sweep once more pages exist, not ad hoc per page)
+- [ ] Phase 10 — Design pass (Swiss system applied consistently, **including the landing page
+      rebuild flagged above**)
 - [ ] Phase 11 — Seed data + full demo scenario walkthrough
-- [ ] Phase 12 — Security review pass (PRD §24 checklist, verified item by item)
+- [ ] Phase 12 — Security review pass
 - [ ] Phase 13 — Documentation + submission packaging
 
 ## Known Bugs / Issues
 
-- **[FIXED, this session] Self-referential RLS policy locked every user out of their own profile
-  row.** The original `profiles_select_same_org` policy (and every other tenant-isolation policy
-  copied from the same pattern) checked
-  `organization_id = (select organization_id from profiles where id = auth.uid())` — but that
-  subquery targets `profiles`, which is *itself* governed by this same policy, so it can never
-  resolve without already knowing the answer it's trying to compute. Net effect: nobody, including
-  a user reading their own row, could ever pass this check. Symptom: an infinite `/login` ↔
-  `/dashboard` redirect loop (middleware sees a valid session and redirects `/login` → `/dashboard`;
-  `requireProfile()` on `/dashboard` can't find a profile via the broken RLS and redirects back to
-  `/login`). Root-caused by directly reproducing the exact query via SQL with
-  `set_config('request.jwt.claims', ...)` to simulate an authenticated request outside the
-  browser, which isolated the problem to RLS rather than app logic. Fixed in migration
-  `004_fix_rls_self_reference` by introducing `private.current_organization_id()` /
-  `private.current_role()` — SECURITY DEFINER functions that resolve the caller's own org/role by
-  bypassing RLS for that one narrow lookup — and rewriting every policy to use them.
-  **A second bug was introduced by the first fix**: the migration also revoked `EXECUTE` on those
-  two helper functions from `authenticated`, which broke RLS evaluation entirely (a policy can't
-  call a function it has no permission to call, regardless of SECURITY DEFINER — that setting only
-  governs what happens *inside* the function once it's legitimately called). Fixed in
-  `005_fix_helper_function_grants`. Both fixes verified via direct SQL repro *and* a full
-  browser-driven walkthrough afterward. Full detail and the corrected canonical pattern are now in
-  `DATABASE.md`.
-- The `/signup` → email-confirmation-link → `/auth/callback` → org-creation path is implemented
-  but still has **not** been click-tested with a real confirmation email link (would require
-  actually clicking a link delivered to a real inbox). What *has* been verified, thoroughly: the
-  `signUp()` → "check your email" state, and — critically — the exact same
-  `create_organization_with_admin` RPC call the callback route makes, exercised directly via SQL
-  with a simulated authenticated session (this is how the RLS bug above was root-caused and
-  re-verified after the fix). Risk is low since the callback route is a thin wrapper around a
-  code path that's now been exercised directly, but a real click-through is still worth doing
-  before Phase 1/2 are considered fully closed.
-- Invite-user (`/admin/users`) is wired up correctly and fails cleanly without
-  `SUPABASE_SERVICE_ROLE_KEY`, but has not been tested with the key actually present — see In
-  Progress above.
-- Two test accounts now exist in the `nsu-memo-system` Supabase project from manual testing this
-  session, both should be deleted/repurposed before Phase 11 seed data is built:
-  - `kamrulshamim65+demoadmin@gmail.com` — org `Acme Corp Demo`, role `org_admin`. Used to
-    verify dashboard/admin flows end-to-end.
-  - One `departments` row (`Finance`) under that same org.
-- Tables (departments, users) don't scroll/wrap gracefully on narrow viewports yet — expected,
-  this is exactly the kind of polish Phase 10's dedicated design pass is for for, not a Phase 2
-  concern.
+- **[FIXED, prior session] Self-referential RLS policy** — see `DATABASE.md`'s "Tenant isolation
+  pattern" section for the full writeup; this is now the canonical documented pattern
+  (`private.current_organization_id()` / `private.current_role()`).
+- **[FIXED, this session] `window.confirm()` on delete-draft** — see Phase 3 notes above.
+- Attachment upload/download UI path not yet click-tested (see In Progress).
+- `/signup` → email-confirmation-link → `/auth/callback` path still not click-tested with a real
+  email (unchanged from last session — still low-risk, same reasoning as before: the RPC it calls
+  has been directly exercised and re-verified multiple times since).
+- Test artifacts in the `nsu-memo-system` Supabase project needing cleanup before Phase 11 seed
+  data: `kamrulshamim65+demoadmin@gmail.com` (org admin, org "Acme Corp Demo"), one `departments`
+  row ("Finance"), one `memos` row ("Q3 Budget Approval Request" — kept deliberately as a
+  rich-text/attachments demo of Phase 3 working; the throwaway "Test Delete Memo" row was deleted
+  as part of testing the delete flow).
+- `memo_number` generation is per-org-counter-table based, not a true Postgres sequence — chosen
+  for simplicity and because `on conflict do update` on a single-row-per-org table is already
+  race-safe for this scale. Documented in `DATABASE.md`; revisit only if it becomes a real
+  bottleneck (very unlikely for a course project's data volume).
 
 ## Decisions Log
 
-- **PDF export library:** not yet chosen (Phase 9 work) — `@react-pdf/renderer` was installed
-  alongside `@supabase/supabase-js`/`@supabase/ssr`/`resend` in the initial dependency pass since
-  PRD leaves the choice open; final choice will be confirmed when Phase 9 is actually built.
-- **Auth onboarding shape:** PRD describes org admins as the ones who "add or invite users" (§3),
-  implying self-service signup isn't really in scope beyond the *first* admin of a *new*
-  organization. Built `/signup` as exactly that: creates one new org + its first `org_admin` in
-  one step via a SECURITY DEFINER RPC (`create_organization_with_admin`). All *subsequent* users
-  in an org are created by that org's admin via `/admin/users` invite, not public self-signup —
-  matches the PRD's role description and avoids an open public signup surface for arbitrary org
-  membership.
-- **Next.js middleware → proxy rename:** Next.js 16 deprecated the `middleware.ts` file convention
-  in favor of `proxy.ts`. Migrated immediately since the deprecation warning showed up in the
-  very first build.
-- **Service role key usage:** used *only* for the admin invite-user server action
-  (`src/lib/supabase/admin.ts`), never for anything else — org bootstrap deliberately still goes
-  through the SECURITY DEFINER RPC instead, so the app's privileged-write surface is as small as
-  possible. The key itself is never handled through chat (see In Progress above) — the user adds
-  it directly to `.env.local`/Vercel themselves.
-- **Invite flow uses Supabase Auth Admin API (`inviteUserByEmail`), not a temp-password flow:**
-  matches PRD §3's "add or invite users" wording, and lets the invited user set their own password
-  via the email link rather than an admin choosing one for them (better security posture, and
-  avoids needing to share a temp password out-of-band).
-- **Private helper-function schema:** `private.current_organization_id()` /
-  `private.current_role()` live in a dedicated `private` Postgres schema rather than `public`,
-  specifically so they're structurally unreachable via PostgREST's `/rest/v1/rpc/...` regardless
-  of grants (defense in depth on top of the grants themselves — see the RLS bug writeup above and
-  `DATABASE.md`).
+*(Phase 1/2 entries unchanged, omitted here for length — see git history for the full prior log
+if needed. New entries below.)*
+
+- **DATABASE.md merge conflict, resolved by re-applying the RLS bugfix documentation on top of
+  the user's instructor-clarification edit** rather than picking one version over the other — see
+  "Done" above for detail. Flagged to the user in the same turn rather than silently choosing.
+- **Phase 3 memo visibility RLS is intentionally narrower than the final PRD §14 rule**: regular
+  users currently only see memos they authored (not yet "or participated in", since
+  `workflow_steps` doesn't exist until Phase 4). This is a deliberate, temporary scope decision to
+  keep Phase 3 buildable without jumping ahead into Phase 4's tables — tracked explicitly as a
+  Phase 4 to-do rather than left ambiguous.
+- **No Submit button in Phase 3.** PRD §26's Phase 3 bullet list ("memo creation form, draft
+  save/edit/delete, categories, priorities, attachments") doesn't include submission, and
+  submitting requires defining an initial participant chain — which needs `workflow_steps`
+  (Phase 4). Building a submit button now would either need to be non-functional or would require
+  jumping ahead into Phase 4's data model, both of which `CLAUDE.md` §5 says not to do.
+- **`window.confirm()` avoided going forward.** Beyond the delete-draft fix, any future
+  destructive-action confirmation in this app should use the same in-app two-step pattern, not a
+  native browser dialog — both for design-system consistency and because it's the only pattern
+  browser-automation testing (used throughout this project's verification) can actually exercise.
 
 ## Environment / Infra Notes
 
-- Supabase project: `nsu-memo-system`, ref `gzevdosekfffippelxmi`, org `qzonwgownzpeuawfddcx`,
-  region `ap-northeast-1`, plan free ($0/month), status ACTIVE_HEALTHY.
-- Vercel project: not yet connected (see In Progress).
-- GitHub repo: https://github.com/arnobalam10-tech/PROJECT-3 (private). First commit `da6406a`
-  pushed to `main`.
-- Resend: not yet configured (`RESEND_API_KEY` blank in `.env.local`).
-- `SUPABASE_SERVICE_ROLE_KEY`: not yet set anywhere (see In Progress — needs the user to add it).
-- Last migration applied: `20260829042744_005_fix_helper_function_grants`.
-- Supabase Auth advisor notes (`get_advisors`, security): one remaining WARN,
-  "Leaked Password Protection Disabled" — a HaveIBeenPwned check that Supabase can enable, but
-  isn't exposed via the MCP tools available in this session (it's an Auth-service setting, not a
-  SQL-editable one). Flagging for the user to toggle in the Supabase dashboard
-  (Authentication → Policies) before the Phase 12 security review, or that phase should catch it
-  as an open item if not done by then.
+- Supabase project: `nsu-memo-system`, ref `gzevdosekfffippelxmi`, region `ap-northeast-1`, free
+  tier, ACTIVE_HEALTHY.
+- Vercel: **https://relay-cyan-alpha.vercel.app/** — confirmed live and working (landing, login,
+  authenticated dashboard all tested against production this session). Currently serving the
+  Phase 2 commit; Relay-rebrand + Phase 3 commit about to be pushed.
+- GitHub: https://github.com/arnobalam10-tech/PROJECT-3 (private).
+- `SUPABASE_SERVICE_ROLE_KEY`: set by the user in `.env.local` and Vercel (confirmed by the user
+  directly, never seen in chat). Not yet re-tested against the invite-user flow.
+- Resend: still not configured.
+- Last migration applied: `20260829045457_010_memo_number_counters_rls`.
+- New Storage bucket: `attachments` (private).
 
 ## Demo / Seed Data Notes
 
-Not built yet (Phase 11). Two incidental test artifacts exist from manual Phase 1/2 testing — see
-Known Bugs above; both need cleanup before real seed data lands.
+Not built yet (Phase 11). See Known Bugs above for the current list of incidental test artifacts
+that need cleanup or intentional replacement first.
 
 ## Reminders for later
 
-- [ ] Export the full Claude Code session/prompt history before final submission — cannot be
-      reconstructed after the fact.
-- [ ] Confirm `.env.example` is fully in sync with actual required env vars.
-- [ ] Write the separate project documentation file (PRD §28.B) — this is distinct from these
-      working docs.
-- [ ] Click-test the real email-confirmation link end-to-end (see Known Bugs above).
-- [ ] Add `SUPABASE_SERVICE_ROLE_KEY` to `.env.local` and Vercel (user action — see In Progress),
-      then actually test an invite end-to-end.
-- [ ] Delete/repurpose the two test artifacts (`kamrulshamim65+demoadmin@gmail.com`, `Finance`
-      dept under `Acme Corp Demo`) before Phase 11 seed data is built.
+- [ ] Export the full Claude Code session/prompt history before final submission.
+- [ ] Confirm `.env.example` is fully in sync (now includes `SUPABASE_SERVICE_ROLE_KEY`).
+- [ ] Write the separate project documentation file (PRD §28.B).
+- [ ] Click-test the real email-confirmation link end-to-end.
+- [ ] Click-test attachment upload/download through the actual browser UI.
+- [ ] Re-test invite-user now that the service role key is configured.
 - [ ] Enable "Leaked Password Protection" in the Supabase Auth dashboard before Phase 12.
-- [ ] Confirm the Vercel deploy is live and get the URL into this file.
+- [ ] Confirm the Vercel redeploy picked up this session's push and matches local `main`.

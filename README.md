@@ -1,4 +1,4 @@
-# Inter-Office Memo Management System
+# Relay
 
 Multi-tenant memo workflow app for CSE226 (Foundations of Vibe Coding, NSU). See `PRD.md`,
 `DATABASE.md`, `DESIGN.md`, and `STATUS.md` in this repo for the full requirements, schema, design

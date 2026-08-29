@@ -1,5 +1,9 @@
 # PRD — Inter-Office Memo Management System
 
+**App name: Relay** — the memo moves like a baton through the chain of people who need to act
+on it. Use this name consistently: page titles, the landing page, emails from Resend, the login
+screen, favicon/wordmark treatment (see `DESIGN.md`).
+
 **Course:** CSE226, Foundations of Vibe Coding, NSU, Summer 2026
 **Type:** Solo submission
 **Deadline:** Midnight, 29 August 2026
@@ -35,6 +39,50 @@ and reporting. Strict tenant isolation: organizations never see each other's dat
 | Tenant isolation mechanism | `organization_id` on every tenant-scoped table + Postgres RLS + server-side authorization checks (belt and suspenders — see `CLAUDE.md` §4) |
 | Scope | Full spec — every section below is in scope, not just a minimal subset. Cut nothing without flagging it in STATUS.md first. |
 
+## 2.5 Instructor Clarifications (authoritative — override the original PDF spec text below wherever they conflict)
+
+Other students asked the course instructor clarifying questions; his live answers refine and in
+some cases change the written spec. Where anything below conflicts with earlier section text
+in this document, **this section wins**. The relevant sections have also been rewritten to
+match, but this list is kept as a single reference point.
+
+1. **Multi-tenancy:** one shared database, organizations isolated purely at the data level
+   (confirmed — no change to our design).
+2. **Auth provider:** instructor's choice to make (confirmed Supabase Auth).
+3. **SSO:** not required.
+4. **Org onboarding:** should feel like signing up for an org-wide SaaS product (e.g. how a
+   company signs up for a business email service) — a person signs up, an organization is
+   created, that person becomes its first admin, and they invite the rest of the org. This is
+   **self-serve public signup**, not an instructor/super-admin-provisioned flow. See §3.1
+   (new).
+5. **Workflow flexibility:** workflows are **not** a rigid, fixed sequence locked in at
+   submission. Whoever currently holds the memo has discretion over what happens next — see
+   the rewritten §7.
+6. **Who can modify the remaining workflow:** anyone currently in the workflow (i.e. whoever
+   the memo is currently with), not just the original author or an admin.
+7. **Search/visibility scope for regular users:** a regular user may only search or see memos
+   they **authored, or are/were a participant in**. This is narrower than "anything they're
+   generally authorized to see" — see rewritten §14. Org admins retain the broader org-level
+   memo visibility already granted to them in §5 of the base spec.
+8. **Workflow step types:** do not build distinct "Reviewer" vs. "Approver" step types.
+   Every step is fundamentally the same underlying thing — a person makes a decision and
+   optionally comments; "even an approval is a comment, really." Keep the action vocabulary
+   (approve / reject / comment / request changes / forward) but don't structurally differentiate
+   step *roles*.
+9. **Notifications:** in-app is the confirmed baseline requirement. Email (via Resend) remains
+   in our scope as an enhancement on top of that baseline — the base spec explicitly allows
+   email as an addition, so this isn't a conflict.
+10. **Explicitly out of scope:** periodic DB backups/snapshots as an app feature (Supabase's own
+    infra backups are sufficient — nothing to build), and API rate limiting/tiers. The
+    instructor tried building both in similar contexts before and said they didn't produce the
+    intended effect, so don't build custom versions of either.
+11. **Not directly answered — treat as out of scope unless you hear otherwise:** MFA, an
+    admin "login as another user" support tool, API keys for external integrations, a
+    platform-wide super-admin role that manages all organizations, org-level data
+    export/import/full-delete tooling, and a formal soft-delete-vs-hard-delete policy beyond
+    what's already implied (deactivate, don't delete, for departments/users; never overwrite
+    memo history). If time allows near the end and these come up again, ask before building.
+
 ## 3. Multi-Tenant Organization Management
 
 Each organization has: name, a unique identifier/slug, logo/profile image, contact info,
@@ -46,6 +94,23 @@ assign users to departments, assign roles, update org info.
 **Hard rule:** no query, page, API route, storage bucket path, or search result may ever expose
 one organization's data to a user in another organization. This must be true even under direct
 URL manipulation or API calls, not just through the normal UI flow.
+
+### 3.1 Organization Onboarding (self-serve)
+
+Modeled on signing up for an org-wide SaaS product (e.g. a business email service):
+- A public "create your organization" signup flow — no invite or platform admin required to
+  start it.
+- The person signing up provides: their own name/email/password, and the new organization's
+  name (slug can be derived or chosen).
+- On successful signup: create the `organizations` row, create the signer's `profiles` row with
+  `role = org_admin`, and log them in.
+- That admin then invites/adds the rest of their org's users from the admin interface (§5's
+  existing admin capabilities already cover this — invite, activate/deactivate, assign roles).
+- No platform-wide super-admin is required to provision orgs — see §2.5 item 11.
+
+Org-level data export/import/full-delete tooling is out of scope (§2.5 item 11) — don't build
+UI for it. Deactivating a user or department must still never delete their historical memo
+data, per §16/§21.
 
 ## 4. Authentication
 
@@ -86,21 +151,58 @@ becomes part of the memo's timeline).
 
 ## 7. Memo Workflow (core system functionality)
 
-- Author defines an **ordered sequence** of participants at submission time (or via a
-  template — see §15).
-- Workflow proceeds strictly sequentially: only the user whose turn it currently is may act.
-  A later participant must never be able to act while an earlier one is still pending — enforce
-  this server-side, not just by hiding the action buttons.
-- Each participant can (depending on configuration for that step): Approve, Reject, Comment,
-  Request Changes, Forward/Complete Review.
-- Every action is recorded permanently in memo history with: user, action, timestamp, optional
-  or required comment (rejection requires a reason; request-changes requires an explanation).
-- **Completion:** when the final participant approves, memo status → Approved/Completed;
-  record final approver, final timestamp, full history. Completed memos become read-only to
-  ordinary users except via the versioning mechanism (§17).
-- **Rejection vs. Request Changes are distinct:** Reject terminates the workflow (status →
-  Rejected). Request Changes returns the memo to the author (or appropriate prior participant)
-  for edits and resubmission, preserving full prior-submission history.
+**Read §2.5 items 5, 6, 8 first — this section implements those clarifications, and is
+dynamic rather than a rigid fixed chain.**
+
+### 7.1 How routing works
+
+- The author starts a memo with an **initial suggested chain** of participants, in order
+  (built freely, or from a template — see §18). This is the starting point, not an immutable
+  contract.
+- At any moment, exactly one person **currently holds** the memo (starts as the first
+  participant once submitted). Only the current holder may act on it — enforce this
+  server-side, never just by hiding buttons.
+- **Whoever currently holds the memo has full discretion over what happens next.** When it
+  lands with them, they can:
+  1. **Approve and forward to the next person in the original chain** (the default, expected
+     path).
+  2. **Approve and forward to someone not in the original chain.** That new person then has
+     the same discretion — they can continue on to the next original participant, add new
+     people to what remains of the chain, or remove people from what remains of the chain.
+  3. **Decline and reroute** — pass the memo to a different person without approving or
+     rejecting its content (e.g. "this isn't mine to approve, X should look at this instead").
+  4. **Reject** — terminates the workflow entirely. Status → Rejected. Requires a reason.
+  5. **Request Changes** — returns the memo to the author for edits. Requires an explanation.
+     A new version is created on resubmission (§20); the memo re-enters the queue with the
+     author as a transient holder who then forwards it onward again using the same discretion
+     above (there is no separate "restart from step 1" vs. "resume" rule to configure — it
+     falls out naturally from the general model, since the author, like anyone else who holds
+     the memo, decides where it goes next on resubmission).
+  6. **Comment** without changing who holds the memo, where that's useful mid-review.
+- Every one of these is, underneath, the same basic primitive: a decision + an optional/required
+  comment + (for forwarding/approving) a choice of who's next. Don't build distinct structural
+  "step types" (e.g. Reviewer vs. Approver) — see §2.5 item 8.
+- Every action is recorded permanently in memo history with: user, action, timestamp, comment,
+  and — when routing changed from the original plan — a note of that change (who was added,
+  removed, or substituted, and by whom), so the timeline stays honest about deviations from the
+  original suggested chain.
+
+### 7.2 Completion
+
+When a holder approves and there is no one left in the remaining chain to forward to, the memo
+is marked **Approved/Completed**. Record the final approver, final timestamp, and complete
+history. Completed memos become read-only to ordinary users except via the versioning mechanism
+(§20).
+
+### 7.3 Reject vs. Request Changes vs. Decline — keep these distinct
+
+Even though routing is flexible, these three remain semantically different and the UI/data
+model must not blur them:
+- **Reject** — terminates the workflow outright (status → Rejected). Required reason.
+- **Request Changes** — sends it back to the author for edits; workflow continues afterward,
+  doesn't end. Required explanation.
+- **Decline & reroute** — the holder isn't rejecting the *content*, just redirecting who should
+  look at it. Doesn't terminate anything and doesn't imply anything negative about the memo.
 
 ## 8. Memo Status
 
@@ -146,10 +248,19 @@ are unread.
 
 ## 14. Search & Filtering
 
-Search within the user's own org and authorization scope only, by: memo number, subject, body,
-author, department, category, status, priority, date range. Search results must never leak
-across tenants or surface memos the user isn't authorized to see — apply the same authorization
-filter to search as to direct navigation.
+Search within the user's own org, by: memo number, subject, body, author, department, category,
+status, priority, date range.
+
+**Visibility scope (per §2.5 item 7):**
+- A **regular user** can only search/see memos they **authored, or are/were a workflow
+  participant on** (past or present holder — not just the current one). This applies to search
+  results, direct navigation, and any other memo listing a regular user encounters — it's the
+  general memo-visibility rule, not just a search-specific restriction.
+- An **org admin** retains the broader org-level memo visibility already granted in §5 (base
+  spec) — they can see organization-level memo information generally, not just their own
+  authored/participated memos.
+- Search results must never leak across tenants, under any circumstance — apply this filter
+  identically at the database level (RLS) and in the API layer, not just in the UI.
 
 ## 15. Dashboard
 
@@ -176,7 +287,10 @@ Reusable named templates defining an ordered sequence of positions (not specific
 - **Procurement Request:** Requester → Dept Head → Procurement → Finance → Director
 
 When creating a memo, the author can pick a template and assign actual users to its positions,
-or define a fully custom one-off workflow.
+or define a fully custom one-off workflow. Per §7.1, a template only supplies the **initial
+suggested chain** — it is a convenient starting point, not a locked contract. Whoever ends up
+holding the memo can still deviate from it (forward to someone new, add/remove remaining
+participants) exactly as described in §7.1, the same as a fully custom workflow.
 
 ## 19. Delegation
 
@@ -233,13 +347,24 @@ comments, and a clear final status indicator (approved / rejected / in progress)
 
 ## 25. User Interface Requirements
 
-Pages required: login, dashboard, inbox, my memos, memo creation, memo details, workflow
-interface, notifications, search/filter, user profile, admin interface. Responsive
-(desktop + mobile). Current workflow state and the required action must be visually obvious at
-a glance — this is a design requirement, not just a functional one; see `DESIGN.md` for exactly
-how status/urgency should read visually within the Swiss design system (e.g. status as
-uppercase tracked-out metadata labels, the single red accent reserved for the item requiring
-the user's action right now).
+**Public landing page (before login):** this is Relay's front door and the first thing anyone
+sees, including whoever grades this — it should be polished, not an afterthought. Contents:
+a clear headline explaining what Relay does (in one sentence a non-technical person would
+understand — e.g. the "digital version of a paper memo routed for signatures" framing), a short
+explanation of how the workflow works (can reuse the sequential-example style from the base
+spec), a "Sign in" action, and a "Create your organization" signup action (§3.1). Apply the
+full Swiss/Basel treatment here deliberately — this page carries the most "design" weight of
+any page in the app, per `DESIGN.md`'s section-break guidance (large black band, giant
+lowercase wordmark, single red accent) for the hero, dropping into the normal 3-column grid
+system below the fold for the explanatory content.
+
+Pages required: landing page, login, dashboard, inbox, my memos, memo creation, memo details,
+workflow interface, notifications, search/filter, user profile, admin interface, organization
+signup. Responsive (desktop + mobile). Current workflow state and the required action must be
+visually obvious at a glance — this is a design requirement, not just a functional one; see
+`DESIGN.md` for exactly how status/urgency should read visually within the Swiss design system
+(e.g. status as uppercase tracked-out metadata labels, the single red accent reserved for the
+item requiring the user's action right now).
 
 ## 26. Build Phases
 

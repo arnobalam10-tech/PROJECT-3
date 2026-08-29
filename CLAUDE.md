@@ -16,6 +16,20 @@ At the start of any session (new or resumed), read in this order before writing 
 Never assume you remember the state of the project from a prior session summary alone —
 `STATUS.md` is the source of truth.
 
+## 0.5 Instructor clarifications override the base spec
+
+`PRD.md` §2.5 records live Q&A between the instructor and other students that refines — and in
+the case of the memo workflow, meaningfully changes — the original spec PDF. Where §2.5
+conflicts with earlier written spec text, §2.5 (and the sections rewritten to match it, e.g.
+§7, §14, §18) wins. Read it before touching workflow, search, or org-onboarding code.
+
+**Explicitly out of scope — do not build these even if they'd be "nice":** SSO, MFA, an admin
+"login as another user" tool, API keys for external integrations, a platform-wide super-admin
+role that manages all organizations, org-level data export/import/full-delete tooling, custom
+DB backup/snapshot features, and API rate limiting/tiers. If asked to reconsider any of these
+later, treat it as a scope decision to confirm with the user first, not something to add
+unprompted.
+
 ## 1. This is a graded course submission — treat it accordingly
 
 This is CSE226 "Foundations of Vibe Coding" at North South University. The grader will read:

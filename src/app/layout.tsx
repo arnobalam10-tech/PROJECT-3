@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Memo System",
-  description: "Inter-office memo management system",
+  title: "Relay",
+  description: "Relay — route memos through your organization's approval chain.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
