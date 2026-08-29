@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { initials } from "@/components/memo-badges";
 import { ProfileForm } from "./profile-form";
+import { ChangePasswordForm } from "./change-password-form";
 
 export default async function ProfilePage() {
   const profile = await requireProfile();
@@ -56,6 +57,16 @@ export default async function ProfilePage() {
         </CardHeader>
         <CardContent>
           <ProfileForm name={profile.name} designation={profile.designation ?? ""} />
+        </CardContent>
+      </Card>
+
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle className="text-base">Change password</CardTitle>
+          <CardDescription>Requires your current password.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ChangePasswordForm />
         </CardContent>
       </Card>
     </div>
