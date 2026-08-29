@@ -40,3 +40,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Claude Code session-local tooling state, not project source (launch.json
+# under .claude/ IS legitimate tracked config and is unaffected by this)
+.claude/scheduled_tasks.lock
