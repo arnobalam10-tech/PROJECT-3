@@ -79,7 +79,9 @@ admin's profile id, set once at self-serve signup — see PRD.md §3.1), created
 
 **memos** (tenant-scoped)
 `id, organization_id, memo_number (unique per org, auto-generated), subject, body (rich text /
-html or jsonb), author_id, department_id, category_id, priority (normal|high|urgent),
+html or jsonb), body_text (plain-text mirror of body's content, trigger-maintained — see
+migration 020, exists purely so search can `ilike` it; `body` itself has no ilike operator since
+it's jsonb), author_id, department_id, category_id, priority (normal|high|urgent),
 status (draft|submitted|pending_review|pending_approval|changes_requested|rejected|approved|
 cancelled), workflow_template_id (nullable, if built from a template), created_at, updated_at,
 submitted_at, completed_at`
@@ -265,6 +267,16 @@ project). As of this note:
     `workflow_assignment` to every participant in the chain, and `workflow_approve`
     (forward-to-someone-new branch) / `workflow_decline_reroute` also send `workflow_assignment`
     (not just `memo_requires_action`) when adding someone who wasn't previously on the workflow.
+19. `20260829074500_020_memo_body_text_search` — **bug fix**, found only by actually running a
+    search against real data (Phase 7), not by review. `memos.body` is `jsonb` (Tiptap document
+    format); Postgres has no `ilike` operator for `jsonb`, so filtering search against `body`
+    directly threw a type error on every single search request — silently, since the search page
+    wasn't checking the query's `error` field, so it looked identical to "no matches" for *every*
+    search, not just ones touching body content. Fixed by adding `memos.body_text`, a plain-text
+    mirror of `body`'s content (every `"text"` node extracted via `jsonb_path_query_array(..,
+    '$.**.text')`), kept in sync by a `BEFORE INSERT OR UPDATE OF body` trigger — same pattern as
+    migration 018's last-activity triggers. Search now filters `body_text`, and the search page
+    now logs (rather than silently swallows) any future query error.
 
 ## Notes for Claude Code
 

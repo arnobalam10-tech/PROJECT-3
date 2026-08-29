@@ -23,6 +23,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <Link href="/inbox">Inbox</Link>
           <Link href="/memos">My Memos</Link>
           <Link href="/completed">Completed</Link>
+          <Link href="/search">Search</Link>
           <Link href="/notifications">
             Notifications
             {!!unreadCount && <span className="ml-1 text-red-700">({unreadCount})</span>}
@@ -31,6 +32,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <>
               <Link href="/admin/users">Users</Link>
               <Link href="/admin/departments">Departments</Link>
+              <Link href="/admin/reports">Reports</Link>
             </>
           )}
         </nav>

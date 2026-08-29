@@ -11,9 +11,8 @@ Updated by: Claude Code
 
 ## Current Phase
 
-Phase 6 (Notifications — in-app + Resend email, PRD §13) is **fully done, including live email
-delivery, confirmed with real evidence** — not just a successful API response. See "Phase 6 —
-live delivery verification" below for the full trail. Moving into Phase 7 next.
+Phase 7 (Search, dashboard, reporting — PRD §14/§15/§22) — done. One real bug found and fixed
+via actually running the search feature against real data, not by reviewing the query.
 
 ## Done ✅
 
@@ -388,6 +387,66 @@ this as an explicit Reminders item below so it isn't missed near the deadline.
   now independently confirmed; the Vercel half still can't be verified by me and needs the user's
   own check of the dashboard.
 
+**Phase 7 — Search, dashboard, reporting (PRD §14/§15/§22).**
+
+- **`/search`** — filters exactly matching PRD §14: memo number, subject, body, author,
+  department, category, status, priority, date range. **Deliberately built with no new
+  authorization logic** — it's the same `memos_select_authorized` RLS policy (author/admin/
+  participant, scoped to `organization_id`) already exhaustively tested in Phase 5, with filters
+  layered on top. Confirmed this with a quick targeted script (4/4 checks) rather than assuming
+  it: a same-org, zero-involvement user searching with filters that *exactly* match a memo
+  (precise subject substring, matching priority) still gets zero rows, because search can't
+  surface anything direct navigation wouldn't already allow.
+- **`/dashboard`** — expanded well beyond the Phase 1 placeholder to match PRD §15. Regular-user
+  section: awaiting-your-action count (derived from `workflow_steps`, not any stored pointer),
+  submitted-by-you count, your-memos-by-status breakdown, recent activity (your own
+  notifications — regular users have no `audit_log` access, so this is the closest real,
+  RLS-visible proxy for "recent activity concerning you"). Admin section (additional, per PRD):
+  user/active-user/department/memo counts, pending/completed/rejected workflow counts, recent
+  *system* activity (real `audit_log` rows, admin-only per its RLS).
+- **`/admin/reports`** — admin-only, filterable by date range/department/category/status per PRD
+  §22. Stats: totals, urgent count, pending count, rejected count, current change-request count,
+  average workflow completion time (`completed_at - submitted_at`, averaged), plus by-status/
+  by-department/by-category breakdowns.
+- **Two ambiguous PRD mappings, decided and logged rather than stalled on or silently guessed:**
+  - PRD §15 lists "pending approvals" and "pending reviews" as separate regular-user dashboard
+    stats — leftover naming from the base spec's Reviewer/Approver step-type distinction, which
+    §2.5 item 8 explicitly collapsed. Rather than invent a fake distinction, both collapse into
+    the single "awaiting your action" tile plus the "your memos by status" breakdown underneath
+    it, which together cover the same real information honestly.
+  - The regular-user dashboard's "Completed (yours)" tile counts anything with `completed_at`
+    set (approved *or* rejected — consistent with `/completed`'s own definition from Phase 5).
+    The admin section's "Completed" stat counts `status = 'approved'` specifically, with
+    "Rejected" broken out as its own separate stat — because PRD §15 lists "completed" and
+    "rejected" as two distinct *admin* stats side by side, so admins specifically need them split.
+    Both are internally consistent with their own immediate context; noted here so the difference
+    reads as intentional, not sloppy.
+- **Verified all of it against a real, known dataset** (4 memos: one approved, one rejected —
+  urgent priority, Technical category — one submitted-and-in-flight, one still a draft), not just
+  that the pages render. Every dashboard tile, every reports stat, and a reports filter
+  (`?status=approved` narrowing 4 memos down to exactly the 1 approved one) were checked by hand
+  against what should have been true given exactly what was created, action by action.
+
+**Real bug found and fixed — caught only by actually searching, not by reading the query:**
+`memos.body` is `jsonb` (Tiptap's document format). Postgres has no `ilike` operator for `jsonb`
+— filtering search against `body` directly throws `operator does not exist: jsonb ~~* unknown`.
+Supabase's client doesn't turn that into a thrown JS exception either; it comes back as
+`{ data: null, error: {...} }`, and the search page's `const { data } = await query` wasn't
+checking `error` at all — so a search for "urgent" against a memo literally titled *"Urgent
+Server Downtime Report"* returned "No matches," indistinguishable from an honest empty result.
+This wasn't a body-search-only bug — because the filter is one combined `.or()` clause, the
+`body` type error failed the *entire* query, breaking subject and memo-number search too, for
+every single search request. Fixed properly (migration 020): added `memos.body_text`, a
+trigger-maintained plain-text mirror of `body`'s content (every `"text"` node extracted via
+`jsonb_path_query_array(body, '$.**.text')`, synced on every insert/update of `body`, same
+pattern as migration 018's last-activity triggers), and search now filters that column instead.
+Also fixed the root enabling cause, not just the symptom: the search page now logs any query
+error instead of silently treating it as zero results. Re-verified after the fix: searching
+"urgent" now correctly finds the memo by subject, **and** searching a deliberately planted
+nonsense string that existed only in one memo's body content (nowhere in its subject or number)
+correctly found that memo and no others — proving body-content search, the actual original
+target of this feature, genuinely works now, not just that the error went away.
+
 ## In Progress 🚧
 
 - **Verify domain at resend.com/domains and update `RESEND_FROM_EMAIL`** before the demo/grading
@@ -484,7 +543,7 @@ deleted immediately after the run; both test scripts were deleted, not committed
 - [x] ~~Phase 6 — Notifications~~ **Done**, including verified live email delivery — see Phase 6
       section above. (Sending domain still needs verification before demo/grading — flagged in
       Reminders — but the code path and delivery mechanics are confirmed working.)
-- [ ] Phase 7 — Search, dashboard, reporting (regular-user search/visibility scope per PRD §2.5
+- [x] ~~Phase 7 — Search, dashboard, reporting~~ **Done** — see Phase 7 section above. (regular-user search/visibility scope per PRD §2.5
       item 7 / §14 — narrower than org-wide, ties into the same `workflow_steps`-based visibility
       widening as Phase 4)
 - [ ] Phase 8 — Templates, delegation, versioning, audit log
@@ -587,7 +646,7 @@ if needed. New entries below.)*
 - `SUPABASE_SERVICE_ROLE_KEY`: set by the user in `.env.local` and Vercel (confirmed by the user
   directly, never seen in chat). Not yet re-tested against the invite-user flow.
 - Resend: still not configured.
-- Last migration applied: `20260829071500_019_workflow_assignment_notifications`.
+- Last migration applied: `20260829074500_020_memo_body_text_search`.
 - `SUPABASE_SERVICE_ROLE_KEY`: confirmed present in `.env.local` (independently re-verified, not
   taken on trust — see Phase 6). Not yet re-tested against invite-user specifically.
 - `RESEND_API_KEY`/`RESEND_FROM_EMAIL`: confirmed present and working — real delivery verified
