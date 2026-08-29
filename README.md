@@ -2,7 +2,7 @@
 
 Multi-tenant memo workflow app for CSE226 (Foundations of Vibe Coding, NSU). See `PRD.md`,
 `DATABASE.md`, `DESIGN.md`, and `STATUS.md` in this repo for the full requirements, schema, design
-system, and current build status. See `docs/PROJECT-DOCUMENTATION.md` for the standalone
+system, and current build status. See `docs/PROJECT_DOCUMENTATION.md` for the standalone
 submission write-up (architecture, security, vibe-coding process, known limitations).
 
 **Live app:** https://relay-cyan-alpha.vercel.app/

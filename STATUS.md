@@ -110,7 +110,7 @@ Progress log (updated as each concrete step lands):
       section below for the complete findings log.
 - [x] Phase 12: `profiles_update_self` column-restriction fix (already-known open item) — **done**,
       see "Phase 12" section below for the full writeup (migration 027, 13/13 checks passed).
-- [x] Phase 13: project documentation file — `docs/PROJECT-DOCUMENTATION.md` created.
+- [x] Phase 13: project documentation file — `docs/PROJECT_DOCUMENTATION.md` created.
 - [x] Phase 13: README/.env.example sync — README updated with live URL + demo credentials;
       `.env.example` was already in sync, no changes needed.
 - [x] Phase 13: final submission checklist review — see "Phase 13" section below for the
@@ -1541,7 +1541,7 @@ returning 0, per this project's standing discipline of never leaving test artifa
 
 ## Phase 13 — Documentation + submission packaging (PRD §28)
 
-**Project documentation** — `docs/PROJECT-DOCUMENTATION.md` created: system overview, a
+**Project documentation** — `docs/PROJECT_DOCUMENTATION.md` created: system overview, a
 requirements-implemented table mapped against every PRD section, tech stack, an architecture
 diagram (Mermaid, covering frontend/backend/DB/auth/file storage/external services), database
 design + multi-tenancy explanation, workflow design explanation (including the full demo-scenario
@@ -1576,7 +1576,7 @@ session.
       this session (signed in, session cookie confirmed httpOnly, dashboard/inbox render real
       seeded data) *after* the Phase 12 security fixes were redeployed — not checked before the
       final code landed.
-- [x] **B. Project documentation** — `docs/PROJECT-DOCUMENTATION.md`, covers every required
+- [x] **B. Project documentation** — `docs/PROJECT_DOCUMENTATION.md`, covers every required
       subsection.
 - [ ] **C. Source code** — the GitHub repository (https://github.com/arnobalam10-tech/PROJECT-3)
       has complete source, all 27 migrations, the seed approach (documented in Phase 11 above --
@@ -1584,13 +1584,32 @@ session.
       discipline of not committing throwaway scripts, but its exact steps and every resulting
       row are fully documented), `.env.example`, and install/build/run instructions in
       `README.md`. **Blocked on one decision only the user can make**: the repo is currently
-      **private** — see "What's needed from you" in the final summary.
-- [ ] **D. AI prompt/response history** — **blocked on the user**: this has to be exported from
-      the live Claude Code session itself; it cannot be generated after the fact or from inside
-      the session.
+      **private** — re-confirmed via an unauthenticated GitHub API check (`api.github.com/repos/
+      arnobalam10-tech/PROJECT-3` → `404 Not Found`, which a public repo would not return) — see
+      "What's needed from you" in the final summary. The ZIP archive link in
+      `docs/PROJECT_DOCUMENTATION.md` §12 will not resolve for anyone without repo access until
+      this changes.
+- [x] **D. AI prompt/response history** — a link to the exported transcript
+      (Google Drive, provided by the user) is now recorded in `docs/PROJECT_DOCUMENTATION.md`
+      §12. **Searched this repository directly before finishing** (`git ls-files` +
+      `find . -iname "*history*" -o -iname "*transcript*"`, and a full untracked-files check) —
+      **no transcript/export file exists anywhere in this repo**, only the external Drive link.
+      If the intent is for a copy to live in the repo itself (not just be linked), that still
+      needs to be added separately — this session did not fetch/save Drive content into the repo,
+      since doing so wasn't explicitly requested and the export is the user's own to provide
+      (§28.D: "the complete, unedited Claude Code session export").
 - [x] **E. Demonstration credentials** — 7 accounts across 2 organizations (1 admin + regular
       users each), documented in `README.md`, this file's Phase 11 section, and
-      `docs/PROJECT-DOCUMENTATION.md` §6.
+      `docs/PROJECT_DOCUMENTATION.md` §11.
+
+**Documentation rewritten (2026-08-29, later session)**: at the user's explicit request,
+`docs/PROJECT_DOCUMENTATION.md` (underscore — replaces and deletes the earlier hyphenated
+`docs/PROJECT-DOCUMENTATION.md`) was rewritten to also include a dedicated §10 walking through
+every one of `PRD.md` §26's 13 build phases individually with real specifics (bug names, exact
+check counts, migration numbers, commit hashes) pulled directly from this file's phase-by-phase
+history, plus a demo-credentials table and a submission-links section carrying the live URL, the
+GitHub ZIP archive link, and the AI-history Drive link the user supplied. `README.md`'s pointer to
+the docs file updated to match the new filename.
 
 ## In Progress 🚧
 
@@ -1862,8 +1881,10 @@ dependency changed.
 
 ## Demo / Seed Data Notes
 
-Not built yet (Phase 11). See Known Bugs above for the current list of incidental test artifacts
-that need cleanup or intentional replacement first.
+**Built in Phase 11** — see that section above for the full build log. Summary: two organizations
+(Northbridge Logistics, Fenwick & Vale Partners), 7 real accounts (all sharing password
+`RelayDemo2026!`), 6 memos covering every workflow status, 1 delegation. Permanent, not deleted.
+Full credentials table also in `README.md` and `docs/PROJECT_DOCUMENTATION.md` §11.
 
 ## Reminders for later
 
