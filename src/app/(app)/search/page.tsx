@@ -103,23 +103,23 @@ export default async function SearchPage({
 
   return (
     <main className="mx-auto max-w-5xl">
-      <h1 className="mb-8 text-3xl font-bold lowercase tracking-tight">search</h1>
+      <h1 className="mb-8 text-3xl headline">search</h1>
 
-      <form className="mb-8 grid grid-cols-1 gap-3 border border-black p-4 text-sm sm:grid-cols-3">
+      <form className="mb-8 grid grid-cols-1 gap-3 border border-ink p-4 text-sm sm:grid-cols-3">
         <label className="flex flex-col gap-1 sm:col-span-3">
-          <span className="text-xs font-medium uppercase tracking-wide text-neutral-500">
+          <span className="text-xs font-medium uppercase tracking-wide text-muted">
             Memo number, subject, or body
           </span>
           <input
             type="text"
             name="q"
             defaultValue={params.q}
-            className="border border-black px-3 py-2"
+            className="border border-ink px-3 py-2"
           />
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium uppercase tracking-wide text-neutral-500">Author</span>
-          <select name="author" defaultValue={params.author ?? ""} className="border border-black bg-white px-3 py-2">
+          <span className="text-xs font-medium uppercase tracking-wide text-muted">Author</span>
+          <select name="author" defaultValue={params.author ?? ""} className="border border-ink bg-surface px-3 py-2">
             <option value="">Any</option>
             {(members ?? []).map((m) => (
               <option key={m.id} value={m.id}>
@@ -129,8 +129,8 @@ export default async function SearchPage({
           </select>
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium uppercase tracking-wide text-neutral-500">Department</span>
-          <select name="department" defaultValue={params.department ?? ""} className="border border-black bg-white px-3 py-2">
+          <span className="text-xs font-medium uppercase tracking-wide text-muted">Department</span>
+          <select name="department" defaultValue={params.department ?? ""} className="border border-ink bg-surface px-3 py-2">
             <option value="">Any</option>
             {(departments ?? []).map((d) => (
               <option key={d.id} value={d.id}>
@@ -140,8 +140,8 @@ export default async function SearchPage({
           </select>
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium uppercase tracking-wide text-neutral-500">Category</span>
-          <select name="category" defaultValue={params.category ?? ""} className="border border-black bg-white px-3 py-2">
+          <span className="text-xs font-medium uppercase tracking-wide text-muted">Category</span>
+          <select name="category" defaultValue={params.category ?? ""} className="border border-ink bg-surface px-3 py-2">
             <option value="">Any</option>
             {(categories ?? []).map((c) => (
               <option key={c.id} value={c.id}>
@@ -151,8 +151,8 @@ export default async function SearchPage({
           </select>
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium uppercase tracking-wide text-neutral-500">Status</span>
-          <select name="status" defaultValue={params.status ?? ""} className="border border-black bg-white px-3 py-2">
+          <span className="text-xs font-medium uppercase tracking-wide text-muted">Status</span>
+          <select name="status" defaultValue={params.status ?? ""} className="border border-ink bg-surface px-3 py-2">
             <option value="">Any</option>
             {Object.entries(STATUS_LABELS).map(([value, label]) => (
               <option key={value} value={value}>
@@ -162,8 +162,8 @@ export default async function SearchPage({
           </select>
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium uppercase tracking-wide text-neutral-500">Priority</span>
-          <select name="priority" defaultValue={params.priority ?? ""} className="border border-black bg-white px-3 py-2">
+          <span className="text-xs font-medium uppercase tracking-wide text-muted">Priority</span>
+          <select name="priority" defaultValue={params.priority ?? ""} className="border border-ink bg-surface px-3 py-2">
             <option value="">Any</option>
             <option value="normal">Normal</option>
             <option value="high">High</option>
@@ -171,15 +171,15 @@ export default async function SearchPage({
           </select>
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium uppercase tracking-wide text-neutral-500">Submitted from</span>
-          <input type="date" name="from" defaultValue={params.from} className="border border-black px-3 py-2" />
+          <span className="text-xs font-medium uppercase tracking-wide text-muted">Submitted from</span>
+          <input type="date" name="from" defaultValue={params.from} className="border border-ink px-3 py-2" />
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium uppercase tracking-wide text-neutral-500">Submitted to</span>
-          <input type="date" name="to" defaultValue={params.to} className="border border-black px-3 py-2" />
+          <span className="text-xs font-medium uppercase tracking-wide text-muted">Submitted to</span>
+          <input type="date" name="to" defaultValue={params.to} className="border border-ink px-3 py-2" />
         </label>
         <div className="flex items-end">
-          <button type="submit" className="w-full bg-black px-4 py-2 font-medium text-white">
+          <button type="submit" className="w-full bg-ink px-4 py-2 font-medium text-surface">
             search
           </button>
         </div>
@@ -188,7 +188,7 @@ export default async function SearchPage({
       {hasAnyFilter ? (
         <table className="w-full border-collapse text-sm">
           <thead>
-            <tr className="border-b border-black text-left text-xs uppercase tracking-wide text-neutral-500">
+            <tr className="border-b border-ink text-left text-xs uppercase tracking-wide text-muted">
               <th className="py-2">Number</th>
               <th className="py-2">Subject</th>
               <th className="py-2">Author</th>
@@ -200,7 +200,7 @@ export default async function SearchPage({
           </thead>
           <tbody>
             {results.map((m) => (
-              <tr key={m.id} className="border-b border-neutral-300">
+              <tr key={m.id} className="border-b border-rule">
                 <td className="py-3 font-mono text-xs">{m.memo_number}</td>
                 <td className="py-3">
                   <Link href={`/memos/${m.id}`} className="font-medium underline">
@@ -213,16 +213,16 @@ export default async function SearchPage({
                   {STATUS_LABELS[m.status] ?? m.status}
                 </td>
                 <td className="py-3 text-xs font-medium uppercase tracking-wide">
-                  {m.priority === "urgent" ? <span className="text-red-700">{m.priority}</span> : m.priority}
+                  {m.priority === "urgent" ? <span className="text-accent">{m.priority}</span> : m.priority}
                 </td>
-                <td className="py-3 text-neutral-600">
+                <td className="py-3 text-body">
                   {m.submitted_at ? new Date(m.submitted_at).toLocaleDateString() : "—"}
                 </td>
               </tr>
             ))}
             {results.length === 0 && (
               <tr>
-                <td colSpan={7} className="py-6 text-center text-neutral-500">
+                <td colSpan={7} className="py-6 text-center text-muted">
                   No matches.
                 </td>
               </tr>
@@ -230,7 +230,7 @@ export default async function SearchPage({
           </tbody>
         </table>
       ) : (
-        <p className="text-sm text-neutral-500">Enter at least one filter to search.</p>
+        <p className="text-sm text-muted">Enter at least one filter to search.</p>
       )}
     </main>
   );

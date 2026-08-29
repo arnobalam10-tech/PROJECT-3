@@ -65,15 +65,15 @@ export default async function AuditLogPage({
 
   return (
     <main className="mx-auto max-w-5xl">
-      <h1 className="mb-2 text-3xl font-bold lowercase tracking-tight">audit log</h1>
-      <p className="mb-8 text-sm text-neutral-600">
+      <h1 className="mb-2 text-3xl headline">audit log</h1>
+      <p className="mb-8 text-sm text-body">
         System-wide, append-only record (PRD §21). Nothing here can be edited or deleted through
         the app — by any role, including admins — see the security review notes in{" "}
         <code>STATUS.md</code> for how that was verified.
       </p>
 
       <form className="mb-6 flex flex-wrap gap-3 text-sm" action="/admin/audit-log">
-        <select name="event_type" defaultValue={params.event_type ?? ""} className="border border-black bg-white px-3 py-2">
+        <select name="event_type" defaultValue={params.event_type ?? ""} className="border border-ink bg-surface px-3 py-2">
           <option value="">All event types</option>
           {Object.entries(EVENT_TYPE_LABELS).map(([value, label]) => (
             <option key={value} value={value}>
@@ -81,7 +81,7 @@ export default async function AuditLogPage({
             </option>
           ))}
         </select>
-        <select name="user" defaultValue={params.user ?? ""} className="border border-black bg-white px-3 py-2">
+        <select name="user" defaultValue={params.user ?? ""} className="border border-ink bg-surface px-3 py-2">
           <option value="">All users</option>
           {(members ?? []).map((m) => (
             <option key={m.id} value={m.id}>
@@ -89,16 +89,16 @@ export default async function AuditLogPage({
             </option>
           ))}
         </select>
-        <input type="date" name="from" defaultValue={params.from} className="border border-black px-3 py-2" />
-        <input type="date" name="to" defaultValue={params.to} className="border border-black px-3 py-2" />
-        <button type="submit" className="border border-black px-3 py-2 font-medium">
+        <input type="date" name="from" defaultValue={params.from} className="border border-ink px-3 py-2" />
+        <input type="date" name="to" defaultValue={params.to} className="border border-ink px-3 py-2" />
+        <button type="submit" className="border border-ink px-3 py-2 font-medium">
           filter
         </button>
       </form>
 
       <table className="w-full border-collapse text-sm">
         <thead>
-          <tr className="border-b border-black text-left text-xs uppercase tracking-wide text-neutral-500">
+          <tr className="border-b border-ink text-left text-xs uppercase tracking-wide text-muted">
             <th className="py-2">When</th>
             <th className="py-2">Event</th>
             <th className="py-2">User</th>
@@ -107,25 +107,25 @@ export default async function AuditLogPage({
         </thead>
         <tbody>
           {items.map((row) => (
-            <tr key={row.id} className="border-b border-neutral-300">
-              <td className="py-3 text-neutral-600">{new Date(row.created_at).toLocaleString()}</td>
+            <tr key={row.id} className="border-b border-rule">
+              <td className="py-3 text-body">{new Date(row.created_at).toLocaleString()}</td>
               <td className="py-3 text-xs font-medium uppercase tracking-wide">
                 {EVENT_TYPE_LABELS[row.event_type] ?? row.event_type}
               </td>
               <td className="py-3">
                 {row.user?.name ?? "—"}
                 {row.on_behalf_of && (
-                  <span className="ml-1 text-xs text-neutral-500">
+                  <span className="ml-1 text-xs text-muted">
                     (on behalf of {row.on_behalf_of.name})
                   </span>
                 )}
               </td>
-              <td className="py-3 text-neutral-600">{row.description ?? "—"}</td>
+              <td className="py-3 text-body">{row.description ?? "—"}</td>
             </tr>
           ))}
           {items.length === 0 && (
             <tr>
-              <td colSpan={4} className="py-6 text-center text-neutral-500">
+              <td colSpan={4} className="py-6 text-center text-muted">
                 No matching events.
               </td>
             </tr>
@@ -133,7 +133,7 @@ export default async function AuditLogPage({
         </tbody>
       </table>
       {items.length === 200 && (
-        <p className="mt-3 text-xs text-neutral-500">
+        <p className="mt-3 text-xs text-muted">
           Showing the most recent 200 matching events — narrow the filters above to see more.
         </p>
       )}

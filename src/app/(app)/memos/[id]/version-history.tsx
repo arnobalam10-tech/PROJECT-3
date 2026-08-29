@@ -17,7 +17,7 @@ export function VersionHistory({ versions }: { versions: Version[] }) {
   return (
     <ul className="flex flex-col gap-2">
       {versions.map((v) => (
-        <li key={v.id} className="border border-black">
+        <li key={v.id} className="border border-ink">
           <button
             type="button"
             onClick={() => setOpenId(openId === v.id ? null : v.id)}
@@ -31,12 +31,12 @@ export function VersionHistory({ versions }: { versions: Version[] }) {
             </span>
           </button>
           {openId === v.id && (
-            <div className="border-t border-black p-3">
-              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-500">
+            <div className="border-t border-ink p-3">
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">
                 Subject at this version
               </p>
               <p className="mb-4 text-sm">{v.snapshot.subject}</p>
-              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-500">
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">
                 Body at this version
               </p>
               <RichTextEditor content={v.snapshot.body} editable={false} />

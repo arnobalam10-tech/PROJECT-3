@@ -88,20 +88,20 @@ export default async function ReportsPage({
 
   return (
     <main className="mx-auto max-w-5xl">
-      <h1 className="mb-8 text-3xl font-bold lowercase tracking-tight">reports</h1>
+      <h1 className="mb-8 text-3xl headline">reports</h1>
 
-      <form className="mb-8 grid grid-cols-2 gap-3 border border-black p-4 text-sm sm:grid-cols-5">
+      <form className="mb-8 grid grid-cols-2 gap-3 border border-ink p-4 text-sm sm:grid-cols-5">
         <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium uppercase tracking-wide text-neutral-500">From</span>
-          <input type="date" name="from" defaultValue={params.from} className="border border-black px-2 py-1.5" />
+          <span className="text-xs font-medium uppercase tracking-wide text-muted">From</span>
+          <input type="date" name="from" defaultValue={params.from} className="border border-ink px-2 py-1.5" />
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium uppercase tracking-wide text-neutral-500">To</span>
-          <input type="date" name="to" defaultValue={params.to} className="border border-black px-2 py-1.5" />
+          <span className="text-xs font-medium uppercase tracking-wide text-muted">To</span>
+          <input type="date" name="to" defaultValue={params.to} className="border border-ink px-2 py-1.5" />
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium uppercase tracking-wide text-neutral-500">Department</span>
-          <select name="department" defaultValue={params.department ?? ""} className="border border-black bg-white px-2 py-1.5">
+          <span className="text-xs font-medium uppercase tracking-wide text-muted">Department</span>
+          <select name="department" defaultValue={params.department ?? ""} className="border border-ink bg-surface px-2 py-1.5">
             <option value="">Any</option>
             {(departments ?? []).map((d) => (
               <option key={d.id} value={d.id}>
@@ -111,8 +111,8 @@ export default async function ReportsPage({
           </select>
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium uppercase tracking-wide text-neutral-500">Category</span>
-          <select name="category" defaultValue={params.category ?? ""} className="border border-black bg-white px-2 py-1.5">
+          <span className="text-xs font-medium uppercase tracking-wide text-muted">Category</span>
+          <select name="category" defaultValue={params.category ?? ""} className="border border-ink bg-surface px-2 py-1.5">
             <option value="">Any</option>
             {(categories ?? []).map((c) => (
               <option key={c.id} value={c.id}>
@@ -122,8 +122,8 @@ export default async function ReportsPage({
           </select>
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium uppercase tracking-wide text-neutral-500">Status</span>
-          <select name="status" defaultValue={params.status ?? ""} className="border border-black bg-white px-2 py-1.5">
+          <span className="text-xs font-medium uppercase tracking-wide text-muted">Status</span>
+          <select name="status" defaultValue={params.status ?? ""} className="border border-ink bg-surface px-2 py-1.5">
             <option value="">Any</option>
             {Object.entries(STATUS_LABELS).map(([value, label]) => (
               <option key={value} value={value}>
@@ -133,7 +133,7 @@ export default async function ReportsPage({
           </select>
         </label>
         <div className="col-span-2 sm:col-span-5">
-          <button type="submit" className="bg-black px-4 py-2 font-medium text-white">
+          <button type="submit" className="bg-ink px-4 py-2 font-medium text-surface">
             apply filters
           </button>
         </div>
@@ -163,9 +163,9 @@ export default async function ReportsPage({
 
 function StatTile({ label, value, accent, isText }: { label: string; value: number | string; accent?: boolean; isText?: boolean }) {
   return (
-    <div className="border border-black p-4">
-      <p className="text-xs font-medium uppercase tracking-wide text-neutral-500">{label}</p>
-      <p className={`mt-1 text-3xl font-bold ${accent ? "text-red-700" : ""}`}>
+    <div className="border border-ink bg-surface p-4">
+      <p className="text-xs font-medium uppercase tracking-wide text-muted">{label}</p>
+      <p className={`mt-1 text-3xl font-bold ${accent ? "text-accent" : ""}`}>
         {isText ? value : value.toLocaleString()}
       </p>
     </div>
@@ -182,24 +182,25 @@ function BreakdownTable({
   labelize?: (key: string) => string;
 }) {
   const entries = [...data.entries()].sort((a, b) => b[1] - a[1]);
+  const max = Math.max(1, ...entries.map(([, c]) => c));
   return (
     <div>
-      <h2 className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-500">{title}</h2>
-      <table className="w-full border-collapse text-sm">
-        <tbody>
-          {entries.map(([key, count]) => (
-            <tr key={key} className="border-b border-neutral-300">
-              <td className="py-2">{labelize ? labelize(key) : key}</td>
-              <td className="py-2 text-right font-medium">{count}</td>
-            </tr>
-          ))}
-          {entries.length === 0 && (
-            <tr>
-              <td className="py-2 text-neutral-500">No data.</td>
-            </tr>
-          )}
-        </tbody>
-      </table>
+      <h2 className="mb-3 text-xs font-medium uppercase tracking-wide text-muted">{title}</h2>
+      {/* Solid black bars, 4px black baseline, no gridlines, plain numeral
+          labels — per DESIGN.md's chart rules. No accent here: none of
+          these breakdowns represent an act-now signal, just a count. */}
+      <div className="flex flex-col gap-2.5 border-t-4 border-ink pt-3">
+        {entries.map(([key, count]) => (
+          <div key={key} className="flex items-center gap-3 text-sm">
+            <span className="w-28 shrink-0 truncate">{labelize ? labelize(key) : key}</span>
+            <div className="h-3 flex-1 bg-rule/40">
+              <div className="h-3 bg-ink" style={{ width: `${(count / max) * 100}%` }} />
+            </div>
+            <span className="w-6 shrink-0 text-right font-medium">{count}</span>
+          </div>
+        ))}
+        {entries.length === 0 && <p className="text-sm text-muted">No data.</p>}
+      </div>
     </div>
   );
 }

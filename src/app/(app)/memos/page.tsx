@@ -43,14 +43,14 @@ export default async function MyMemosPage() {
   return (
     <main className="mx-auto max-w-5xl">
       <div className="mb-8 flex items-center justify-between">
-        <h1 className="text-3xl font-bold lowercase tracking-tight">my memos</h1>
-        <Link href="/memos/new" className="bg-black px-4 py-2 text-sm font-medium text-white">
+        <h1 className="text-3xl headline">my memos</h1>
+        <Link href="/memos/new" className="bg-ink px-4 py-2 text-sm font-medium text-surface">
           new memo
         </Link>
       </div>
       <table className="w-full border-collapse text-sm">
         <thead>
-          <tr className="border-b border-black text-left text-xs uppercase tracking-wide text-neutral-500">
+          <tr className="border-b border-ink text-left text-xs uppercase tracking-wide text-muted">
             <th className="py-2">Number</th>
             <th className="py-2">Subject</th>
             <th className="py-2">Status</th>
@@ -67,7 +67,7 @@ export default async function MyMemosPage() {
             // "who currently holds this memo" is always a live query).
             const current = m.workflow_steps?.find((s) => s.status === "current");
             return (
-              <tr key={m.id} className="border-b border-neutral-300">
+              <tr key={m.id} className="border-b border-rule">
                 <td className="py-3 font-mono text-xs">{m.memo_number}</td>
                 <td className="py-3">
                   <Link href={`/memos/${m.id}`} className="font-medium underline">
@@ -79,18 +79,18 @@ export default async function MyMemosPage() {
                 </td>
                 <td className="py-3">{current?.profiles?.name ?? "—"}</td>
                 <td className="py-3 text-xs font-medium uppercase tracking-wide">
-                  {m.priority === "urgent" ? <span className="text-red-700">{m.priority}</span> : m.priority}
+                  {m.priority === "urgent" ? <span className="text-accent">{m.priority}</span> : m.priority}
                 </td>
-                <td className="py-3 text-neutral-600">
+                <td className="py-3 text-body">
                   {m.submitted_at ? new Date(m.submitted_at).toLocaleDateString() : "—"}
                 </td>
-                <td className="py-3 text-neutral-600">{new Date(m.updated_at).toLocaleString()}</td>
+                <td className="py-3 text-body">{new Date(m.updated_at).toLocaleString()}</td>
               </tr>
             );
           })}
           {rows.length === 0 && (
             <tr>
-              <td colSpan={7} className="py-6 text-center text-neutral-500">
+              <td colSpan={7} className="py-6 text-center text-muted">
                 No memos yet — create your first draft.
               </td>
             </tr>

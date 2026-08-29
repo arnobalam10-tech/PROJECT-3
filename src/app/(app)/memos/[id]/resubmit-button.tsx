@@ -18,7 +18,7 @@ export function ResubmitButton({ memoId }: { memoId: string }) {
           router.refresh();
         })
       }
-      className="bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+      className="bg-ink px-4 py-2 text-sm font-medium text-surface disabled:opacity-50"
     >
       {pending ? "resubmitting…" : "resubmit"}
     </button>

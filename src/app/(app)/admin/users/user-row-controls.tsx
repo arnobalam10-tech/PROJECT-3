@@ -28,7 +28,7 @@ export function UserRowControls({ userId, role, status, departmentId, department
             router.refresh();
           })
         }
-        className="border border-black bg-white px-2 py-1 text-xs disabled:opacity-50"
+        className="border border-ink bg-surface px-2 py-1 text-xs disabled:opacity-50"
       >
         <option value="regular_user">Regular user</option>
         <option value="org_admin">Org admin</option>
@@ -42,7 +42,7 @@ export function UserRowControls({ userId, role, status, departmentId, department
             router.refresh();
           })
         }
-        className="border border-black bg-white px-2 py-1 text-xs"
+        className="border border-ink bg-surface px-2 py-1 text-xs"
       >
         <option value="">— no department —</option>
         {departments.map((d) => (
@@ -60,7 +60,7 @@ export function UserRowControls({ userId, role, status, departmentId, department
             router.refresh();
           })
         }
-        className="border border-black px-3 py-1 text-xs font-medium uppercase tracking-wide disabled:opacity-50"
+        className="border border-ink px-3 py-1 text-xs font-medium uppercase tracking-wide disabled:opacity-50"
       >
         {status === "active" ? "deactivate" : "activate"}
       </button>

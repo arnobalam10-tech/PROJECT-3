@@ -4,14 +4,17 @@
 rules. It is the source of truth for "what's the current state of the project" — more reliable
 than memory of prior sessions. Be precise and honest; "mostly done" is not an acceptable status.
 
-Last updated: 2026-08-29 (Phase 9 session)
+Last updated: 2026-08-29 (Phase 10 session)
 Updated by: Claude Code
 
 ---
 
 ## Current Phase
 
-Phase 9 (PDF export — PRD §23) — done. Moving into Phase 10 (design pass) next.
+Phase 10 (Design pass — Swiss/Basel system per `DESIGN.md`) — done, **pending the user's own visual
+review of the live Vercel deploy before Phase 11**, per their explicit request for this phase
+specifically (not just a status report). See "Phase 10" section below for the page-by-page
+done/rough breakdown they asked for.
 
 ## Done ✅
 
@@ -708,16 +711,23 @@ comments) straightforward to lay out correctly on the first pass.
   can view the page at all — §23 doesn't restrict export more narrowly than view access, and
   nothing in this codebase's authorization model draws that distinction elsewhere either.
 
-**A second "package I assumed vs. package that's actually there" moment worth noting**: while
+**A "package I assumed vs. package that's actually there" moment, corrected in Phase 10**: while
 inspecting `package.json` at the start of this phase, a debug `console.log` briefly made it look
 like a *different*, unrelated package (`react-pdf`, a PDF *viewer* wrapper around PDF.js — easy to
 confuse by name with `@react-pdf/renderer`, a PDF *generator*) might have been installed instead
 of the right one. Re-checked directly with `Object.keys(require('@react-pdf/renderer'))` against
 the actual installed package before writing any code — it was the correct one all along; the
-mix-up was in my own mislabeled console output, not in the dependency tree. Worth a beat of
-paranoia given `react-pdf` is genuinely unused dead weight sitting in `package.json` from an
-earlier session — flagged here rather than removed unprompted, since deleting a dependency someone
-else added isn't a Phase 9 task.
+mix-up was in my own mislabeled console output, not in the dependency tree.
+
+**However, the write-up above then made an unverified claim that turned out to be false**: it said
+`react-pdf` was "genuinely unused dead weight sitting in `package.json`" — but that was never
+actually re-checked against `package.json` itself, only inferred from the confused debug output.
+When Phase 10 came to remove it (per the user's request, acting in good faith on that claim),
+`npm uninstall react-pdf` correctly did nothing, and `grep -i react-pdf package.json` confirmed
+why: **there never was a separate `react-pdf` entry** — only `@react-pdf/renderer`, which is the
+correct package and is in active use. Corrected here rather than left standing, since a claim I
+made turned out to be wrong and the user acted on it — worth being explicit about rather than
+quietly fixing the sentence.
 
 **Verified with real content, not just that the route returns 200 — the same lesson the search
 bug (Phase 7) and the two Phase 8 regressions taught this session: check the actual output, not
@@ -754,6 +764,187 @@ just its status code:**
   upload — upload/download itself was already exhaustively verified via script in Phase 3's
   follow-up verification, 17/17 checks, so this phase only needed to prove the PDF route's own
   *listing* logic, not re-prove storage works) were deleted immediately after.
+
+## Phase 10 — Design pass (`DESIGN.md`'s Swiss/Basel system, applied consistently).
+
+**Foundation, since this cascades to every page:**
+- `src/app/globals.css` — replaced the untouched Next.js scaffold (Geist font, plain white/black,
+  a dark-mode media query the app never wanted) with `DESIGN.md`'s exact palette as Tailwind v4
+  `@theme` tokens: `ink #111111`, `background #F4F1EA`, `surface #FFFFFF`, `accent #E32213`,
+  `accent-tint #F9DCD8`, `body #4A463E`, `muted #8A867E`, `rule #DAD5C8`. A `.headline` utility
+  class captures Archivo's negative-tracking poster-headline treatment (weight 700, `-0.03em`
+  letter-spacing, 0.92 line-height, lowercase) in one place instead of repeating four utility
+  classes on every `<h1>`.
+- `src/app/layout.tsx` — swapped Geist for Archivo via `next/font/google`, applied
+  `bg-background text-ink font-sans` at the body level so every page inherits the system by
+  default rather than needing to opt in per-page.
+- Bulk-swept every legacy Tailwind color class (`text-neutral-500`, `border-black`, `bg-black`,
+  `text-red-700`, `bg-white`, `text-white`, `focus:outline-black`, the `font-bold lowercase
+  tracking-tight` headline pattern, etc.) to the new named tokens across all ~35 page/component
+  files with `sed`, then hand-reviewed every file the sweep touched — this was a mechanical
+  1:1 rename (e.g. `border-black` → `border-ink`), not a design decision, so bulk-applying it
+  was the right level of effort, not corner-cutting.
+
+**The specific "Swiss vs. generic minimal" tells the user asked to check, addressed explicitly:**
+- **3px black top bar**: already existed in the app shell from an earlier phase; confirmed still
+  present after the sweep, plus added to `/login` and `/signup`, which previously had no shell at
+  all (`DESIGN.md`: "3px solid black top bar across every page").
+- **Archivo, lowercase, tight-tracked headlines**: the `.headline` class, applied to every page
+  `<h1>` and the landing page's giant wordmark.
+- **Hairline dividers instead of shadows/cards**: confirmed zero `rounded`/`shadow`/`gradient`
+  classes anywhere in `src` (the app was already disciplined about this from earlier phases) —
+  tables use `border-rule`/`border-ink` hairlines, no card wrappers, no zebra striping.
+- **Status as uppercase tracked labels, not pills**: already the existing pattern; the real gap
+  was the *color* discipline, not the shape — see the accent-audit finding below.
+- **The single red accent, reserved for "needs this user's action now"**: audited every
+  `text-accent`/`border-accent` occurrence across the app individually (not just renamed) and
+  found — and fixed — **three real violations** where red was being used for something merely
+  informational rather than actionable:
+  1. `/completed`'s outcome column colored **Rejected** red. Per `DESIGN.md`: "muted gray for
+     completed/inactive" — a completed memo needs nobody's action, regardless of outcome. Now
+     muted gray, matching Approved/Cancelled.
+  2. `/delegations`' status badge colored **Revoked** red. A delegation's status is purely
+     historical information on that page; nothing there requires the viewer to act. Now
+     near-black (active) / muted (expired or revoked) — no accent.
+  3. The PDF export's `statusColor()` (built in Phase 9) colored **Rejected** red for the same
+     reason as #1 — worse there, since **a static exported document has no "viewing user" whose
+     turn it is at all**, so there was never a valid act-now referent to justify red anywhere in
+     its status badge. Now: muted for any terminal status, near-black for in-progress, and the
+     accent is reserved exclusively for Urgent priority (re-verified by regenerating a real PDF
+     for a rejected+urgent memo after the fix — badge reads "REJECTED" in gray, "urgent" in red).
+  Confirmed correct usage (left unchanged) in the process: inbox's urgent-priority tag and
+  "Review & decide" required-action label, the memo detail page's urgent-priority tag, the
+  workflow timeline's current-step marker, and every dashboard/reports stat tile's `accent` prop
+  (only ever wired to "Urgent" counts — checked both call sites directly, not assumed).
+  Also fixed a **related but distinct bug** found live in the browser, not by code review: the
+  memo detail header colored the *status text* red whenever priority was urgent (a coupling that
+  predates this phase), which reads as "the status itself is alarming" rather than "priority is
+  urgent" — split into two independent signals (status text color reflects in-progress/terminal;
+  a separate small "· urgent" tag carries the accent).
+- **Timeline with square markers**: `DESIGN.md` names this specifically — "a vertical hairline
+  rule with square black event markers; the current/pending step gets the red marker, completed
+  steps get black, future steps get muted gray outline-only markers." The memo detail page's
+  Workflow section previously had no markers at all (a plain bordered list). Rebuilt with actual
+  square markers on a connecting hairline rule: red-filled for `current`, muted-outline for
+  `queued`, solid black for every resolved status. Verified visually against a genuinely
+  single-step case (red) and a genuinely resolved case (black) — see below. The chronological
+  Timeline (mixed approvals + comments) got a lighter version of the same treatment (small solid
+  dots, no red — it's a pure history log, nothing "current" about a past comment) for visual
+  consistency with the section above it.
+- **Charts**: `DESIGN.md`'s bar-chart rules ("solid black bars, 4px black baseline, no gridlines,
+  plain numeral labels") weren't being applied anywhere — the by-status/department/category
+  breakdowns on `/admin/reports` and the "your memos by status" breakdown on `/dashboard` were
+  plain two-column number tables. Rebuilt both as horizontal bar charts matching the rule exactly;
+  no red series on either, since none of these breakdowns represent an act-now signal (a
+  department's memo count isn't something to act on).
+- **Square corners, no gradients, no icon-library icons**: confirmed already true everywhere
+  (`grep`-audited for `rounded`/`shadow`/`gradient` across all of `src`, zero hits beyond a code
+  comment referencing the rule itself) — nothing to fix here, the app was already disciplined
+  about this from earlier phases.
+
+**A real gap found and closed, not just restyled**: `/profile` **did not exist anywhere in the
+codebase** before this phase, despite being named as a required page in PRD §25 and a granted
+permission in PRD §5 ("manage their own profile"). Built it now — view own email/role/department/
+status, edit name and designation (the two fields a regular user should plausibly self-manage;
+department/role/status stay admin-controlled per the existing admin/users flow) — since a design
+pass has nothing to apply design *to* on a page that was never built, and leaving it silently
+missing would have meant discovering the 404 during the user's own review rather than now. Server
+action verified end-to-end, not just visually: edited the designation through the real form,
+confirmed the new value persisted in the database directly, not just that the UI re-rendered.
+
+**A pre-existing authorization gap noticed while building `/profile`, deliberately NOT fixed here
+— flagged for Phase 12 instead**: `profiles`' `profiles_update_self` RLS policy (`for update
+using (id = auth.uid())`, migration 001, Phase 1) has no `with check` restricting *which columns*
+a self-update may touch. Postgres treats a missing `with check` as reusing `using`, which only
+constrains `id` — meaning a regular user could, via a direct API call bypassing this app's UI
+entirely, self-promote `role` from `regular_user` to `org_admin`, or reassign their own
+`organization_id`/`department_id`/`status`. This is **not a regression introduced by this
+phase** — it's predated every session since Phase 1, and building a UI for the (legitimate) name/
+designation self-edit doesn't change the underlying RLS exposure at all, which was already
+reachable via direct REST calls regardless of any UI. Not fixed now because: (1) it's a security
+fix, not a design-pass task, and blurring that scope right as the user is about to review UI
+carries its own risk; (2) Phase 12 ("Security review pass — go through §24's checklist explicitly")
+is the designed home for exactly this class of finding. Added to the Phase 12 checklist explicitly
+below so it isn't lost.
+
+**Also corrected, not just newly discovered**: the Phase 9 write-up claimed `react-pdf` (a PDF
+*viewer* library, confusingly similar in name to `@react-pdf/renderer`, the PDF *generator* this
+app actually uses) was "unused dead weight" sitting in `package.json`. The user asked for it to be
+removed as a small cleanup; `npm uninstall react-pdf` correctly did nothing, because **that claim
+was never actually true** — `grep -i react-pdf package.json` confirms there is, and never was, a
+separate `react-pdf` entry; only `@react-pdf/renderer` exists, and it's in active, correct use.
+The original Phase 9 note was an unverified assumption stated as fact; corrected in place in that
+section rather than left standing, since the user acted on it in good faith.
+
+**Verified visually in the real browser, in an order matching the user's own list**, against a
+fresh throwaway org with realistic mixed data (three named users, two departments, a submitted+
+urgent memo, an approved memo, a rejected memo, a draft) — not just the design tokens compiling,
+the actual rendered pages:
+
+- Landing page — full hero (3px-metadata top row, giant lowercase "relay" wordmark at
+  poster-scale, single red accent rule, black band), dropping into the 3-column "create / route /
+  resolve" grid (reusing the PRD's own "Employee → Dept Head → Finance → Director" example
+  verbatim, per §25's explicit instruction to reuse that style) below the fold, then a closing CTA
+  band.
+- Login — 3px bar + headline + token colors.
+- Dashboard (regular-user and admin sections) — stat tiles (including the urgent-count tile
+  correctly red, the rejected-count tile correctly *not* red), the new bar-chart breakdown, and a
+  genuine hover-state bug caught live (StatTile's hover class was `hover:bg-background` sitting on
+  a page already at `bg-background` — a no-op that had *never* visibly done anything since the
+  page background was set; fixed by giving tiles an explicit white surface at rest and a
+  black-invert hover, a real fix, not just a token rename).
+- Inbox — confirmed the canonical DESIGN.md example directly: urgent priority and the "Review &
+  decide" required-action label both red, "Submitted" status plain.
+- Completed — confirmed Rejected renders muted, not red, after the fix.
+- Memo detail — header (status/priority now split, both readable), body, attachments, action
+  panel, the new square-marker Workflow timeline (checked both a red `current` single-step case
+  and a black resolved case), the lighter-weight comment/approval Timeline, Version History.
+  Also caught and fixed a **real navigation bug live**, not by reading code: the app-shell nav's
+  active-link logic used a prefix match, so visiting a memo detail page reached from Inbox
+  incorrectly bolded "My Memos" in the nav (since `/memos/[id]` starts with `/memos`) — switched
+  to exact-path matching, which also correctly means `/memos/[id]` now highlights nothing (it's
+  genuinely reachable from Inbox, Completed, or Search alike, so no single nav item owns it).
+- Admin Reports — stat tiles + the new bar charts, confirmed via raw page text (not just the
+  screenshot, which rendered "Draft" too small to read confidently) that a fourth breakdown row
+  I initially misread as blank was in fact present and correct.
+- Admin Users — table + invite form.
+- Profile — both the view and the edit flow, including a real database round-trip.
+- Search, Notifications — form and empty-state rendering.
+
+**Swept and code-reviewed identically to the verified pages above (same mechanical token rename,
+same class of component), but not independently re-screenshotted this round**: Signup, My Memos,
+memo creation (`/memos/new`), Admin Departments, Admin Templates, Admin Audit Log, Delegations.
+These were visually verified in earlier phases (7 and 8) before this pass existed, and this
+phase's changes to them were a pure, low-risk 1:1 class substitution (e.g. `text-red-700` →
+`text-accent` on an already-correct usage) rather than new logic — but flagged here explicitly
+as "not re-looked-at this round" rather than silently implied as re-verified, since the user asked
+for an honest done-vs-rough breakdown, not just a completion claim.
+
+**PDF export's visual layout** — brought into the same palette (the Phase 9 red-for-Rejected bug
+above was actually caught and fixed *here*, in Phase 10, while auditing accent usage app-wide, not
+in Phase 9 itself). One deliberate, disclosed compromise: the PDF uses Helvetica, not an embedded
+Archivo font — `@react-pdf/renderer` requires a real font file to be registered and embedded for
+custom fonts, which would mean fetching/bundling a font file into a server route rather than using
+`next/font`'s CSS mechanism, added complexity not clearly justified for a phase whose task list
+called the PDF's layout "reasonably in scope," not a hard requirement. Colors, spacing, and the
+accent-usage rule are all fully correct; only the literal typeface differs from the web app.
+
+**Known rough edges, disclosed rather than left implicit:**
+- Table column headers can visually crowd at narrow viewport widths (e.g. "Status" and "Role /
+  Department" merging on `/admin/users` at ~730px) — a density/wrapping issue at one specific
+  width, not a design-system violation (no shadows/pills/rounded corners involved); low priority.
+- The admin nav section (5 extra links for org_admins) makes the top bar's `<nav>` genuinely long
+  on narrow viewports. It wraps correctly and the hairline section divider is now hidden below
+  `sm:` (fixed this phase — it looked orphaned mid-wrap before), but a true hamburger/collapsed
+  nav for mobile would be a further, larger UI change beyond what `DESIGN.md` explicitly asks for;
+  not built, since it's a new interaction pattern rather than applying the existing system.
+- No individual page was tested at an exact 375px mobile viewport this round (the Browser pane
+  itself renders at ~730-800px, below Tailwind's `md:` breakpoint, which did exercise the
+  single-column mobile-first fallback path on every grid used — but that's not the same as
+  confirming true small-phone width specifically). The responsive classes (`grid-cols-1
+  sm:.../md:...`) are standard, low-risk Tailwind patterns, not custom breakpoint logic, so
+  confidence is reasonably high without a dedicated mobile pass, but this wasn't independently
+  re-verified at 375px specifically.
 
 ## In Progress 🚧
 
@@ -857,14 +1048,29 @@ deleted immediately after the run; both test scripts were deleted, not committed
 - [x] ~~Phase 8 — Templates, delegation, versioning, audit log~~ **Done** — see Phase 8 section
       above, including a self-caught-and-fixed regression documented in full.
 - [x] ~~Phase 9 — PDF export~~ **Done** — see Phase 9 section above.
-- [ ] Phase 10 — Design pass (Swiss system applied consistently, **including the landing page
-      rebuild flagged above**)
+- [x] ~~Phase 10 — Design pass~~ **Done, pending the user's own visual review of the live deploy**
+      (their explicit request for this phase specifically) — see Phase 10 section above for the
+      full done/rough breakdown, including the landing page rebuild flagged since Phase 2.
 - [ ] Phase 11 — Seed data + full demo scenario walkthrough
-- [ ] Phase 12 — Security review pass
+- [ ] Phase 12 — Security review pass — **now has a specific known item queued**: the
+      `profiles_update_self` RLS policy (migration 001) lacks a `with check` restricting which
+      columns a self-update may touch, meaning a regular user could self-promote `role` or
+      reassign `organization_id`/`department_id`/`status` via a direct API call. Found in Phase
+      10 while building `/profile`, deliberately not fixed there (security fix, not a design-pass
+      task) — see that phase's section for the full reasoning. Fix: either a `with check` clause
+      that also asserts the unchanged columns via a trigger comparison, or a column-level
+      `GRANT UPDATE (name, designation)` for the self-service path specifically.
 - [ ] Phase 13 — Documentation + submission packaging
 
 ## Known Bugs / Issues
 
+- **[OPEN, found Phase 10, queued for Phase 12] `profiles_update_self` RLS policy has no column
+  restriction** — a regular user can self-update any column on their own `profiles` row via a
+  direct API call, including `role` (self-promotion to `org_admin`), `organization_id`, and
+  `status`, since the policy's `using (id = auth.uid())` has no `with check` narrowing which
+  fields may change. Pre-dates every phase since migration 001 (Phase 1); not a regression from
+  building `/profile` in Phase 10, just newly noticed while doing so. See Phase 10's section and
+  the Phase 12 checklist item above for the fix approach.
 - **[FIXED, prior session] Self-referential RLS policy** — see `DATABASE.md`'s "Tenant isolation
   pattern" section for the full writeup; this is now the canonical documented pattern
   (`private.current_organization_id()` / `private.current_role()`).

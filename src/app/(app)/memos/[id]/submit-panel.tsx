@@ -65,24 +65,24 @@ export function SubmitPanel({
     !!selectedTemplate && selectedTemplate.positions.every((p) => !!templateAssignments[p.id]);
 
   return (
-    <section className="mt-10 border border-black p-4">
-      <h2 className="mb-3 text-xs font-medium uppercase tracking-wide text-neutral-500">
+    <section className="mt-10 border border-ink p-4">
+      <h2 className="mb-3 text-xs font-medium uppercase tracking-wide text-muted">
         Submit for approval
       </h2>
-      <p className="mb-4 text-sm text-neutral-600">
+      <p className="mb-4 text-sm text-body">
         Choose an ordered chain of participants. This is a starting point — whoever holds the
         memo can still forward it to someone new, reroute it, or adjust who comes next.
       </p>
 
       {templates.length > 0 && (
-        <div className="mb-4 border border-neutral-400 p-3">
-          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-500">
+        <div className="mb-4 border border-rule p-3">
+          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">
             Start from a template (PRD §18) — optional, replaces the chain below once applied
           </p>
           <select
             value={templateId}
             onChange={(e) => pickTemplate(e.target.value)}
-            className="mb-2 w-full border border-black bg-white px-3 py-2 text-sm"
+            className="mb-2 w-full border border-ink bg-surface px-3 py-2 text-sm"
           >
             <option value="">Choose a template…</option>
             {templates.map((t) => (
@@ -95,7 +95,7 @@ export function SubmitPanel({
             <div className="flex flex-col gap-2">
               {selectedTemplate.positions.map((p) => (
                 <label key={p.id} className="flex items-center gap-2 text-sm">
-                  <span className="w-32 shrink-0 text-xs uppercase tracking-wide text-neutral-500">
+                  <span className="w-32 shrink-0 text-xs uppercase tracking-wide text-muted">
                     {p.position_label}
                   </span>
                   <select
@@ -103,7 +103,7 @@ export function SubmitPanel({
                     onChange={(e) =>
                       setTemplateAssignments((a) => ({ ...a, [p.id]: e.target.value }))
                     }
-                    className="flex-1 border border-black bg-white px-3 py-2"
+                    className="flex-1 border border-ink bg-surface px-3 py-2"
                   >
                     <option value="">Assign a person…</option>
                     {members.map((m) => (
@@ -118,7 +118,7 @@ export function SubmitPanel({
                 type="button"
                 onClick={applyTemplate}
                 disabled={!allPositionsAssigned}
-                className="mt-1 self-start border border-black px-3 py-1.5 text-xs font-medium uppercase tracking-wide disabled:opacity-50"
+                className="mt-1 self-start border border-ink px-3 py-1.5 text-xs font-medium uppercase tracking-wide disabled:opacity-50"
               >
                 apply template
               </button>
@@ -129,27 +129,27 @@ export function SubmitPanel({
 
       <ol className="mb-4 flex flex-col gap-2">
         {chain.map((m, i) => (
-          <li key={m.id} className="flex items-center justify-between border border-black px-3 py-2 text-sm">
+          <li key={m.id} className="flex items-center justify-between border border-ink px-3 py-2 text-sm">
             <span>
               {i + 1}. {m.name}
             </span>
             <button
               type="button"
               onClick={() => removeFromChain(m.id)}
-              className="text-xs font-medium uppercase tracking-wide text-red-700 underline"
+              className="text-xs font-medium uppercase tracking-wide text-accent underline"
             >
               remove
             </button>
           </li>
         ))}
-        {chain.length === 0 && <li className="text-sm text-neutral-500">No participants added yet.</li>}
+        {chain.length === 0 && <li className="text-sm text-muted">No participants added yet.</li>}
       </ol>
 
       <div className="mb-4 flex gap-2">
         <select
           value={pick}
           onChange={(e) => setPick(e.target.value)}
-          className="flex-1 border border-black bg-white px-3 py-2 text-sm"
+          className="flex-1 border border-ink bg-surface px-3 py-2 text-sm"
         >
           <option value="">Add a participant…</option>
           {available.map((m) => (
@@ -162,7 +162,7 @@ export function SubmitPanel({
           type="button"
           onClick={addToChain}
           disabled={!pick}
-          className="border border-black px-3 py-2 text-sm font-medium disabled:opacity-50"
+          className="border border-ink px-3 py-2 text-sm font-medium disabled:opacity-50"
         >
           add
         </button>
@@ -174,11 +174,11 @@ export function SubmitPanel({
         {chain.map((m) => (
           <input key={m.id} type="hidden" name="participant_id" value={m.id} />
         ))}
-        {state.error && <p className="mb-3 text-sm text-red-700">{state.error}</p>}
+        {state.error && <p className="mb-3 text-sm text-accent">{state.error}</p>}
         <button
           type="submit"
           disabled={pending || chain.length === 0}
-          className="bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+          className="bg-ink px-4 py-2 text-sm font-medium text-surface disabled:opacity-50"
         >
           {pending ? "submitting…" : "submit memo"}
         </button>

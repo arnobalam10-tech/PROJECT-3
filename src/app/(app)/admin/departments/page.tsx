@@ -17,11 +17,11 @@ export default async function DepartmentsPage() {
 
   return (
     <main className="mx-auto max-w-3xl">
-      <h1 className="mb-8 text-3xl font-bold lowercase tracking-tight">departments</h1>
+      <h1 className="mb-8 text-3xl headline">departments</h1>
       <NewDepartmentForm />
       <table className="w-full border-collapse text-sm">
         <thead>
-          <tr className="border-b border-black text-left text-xs uppercase tracking-wide text-neutral-500">
+          <tr className="border-b border-ink text-left text-xs uppercase tracking-wide text-muted">
             <th className="py-2">Name</th>
             <th className="py-2">Description</th>
             <th className="py-2">Status</th>
@@ -30,13 +30,13 @@ export default async function DepartmentsPage() {
         </thead>
         <tbody>
           {(departments ?? []).map((d) => (
-            <tr key={d.id} className="border-b border-neutral-300">
+            <tr key={d.id} className="border-b border-rule">
               <td className="py-3 font-medium">{d.name}</td>
-              <td className="py-3 text-neutral-600">{d.description ?? "—"}</td>
+              <td className="py-3 text-body">{d.description ?? "—"}</td>
               <td className="py-3">
                 <span
                   className={`text-xs font-medium uppercase tracking-wide ${
-                    d.status === "active" ? "text-black" : "text-neutral-500"
+                    d.status === "active" ? "text-ink" : "text-muted"
                   }`}
                 >
                   {d.status}
@@ -46,7 +46,7 @@ export default async function DepartmentsPage() {
                 <form action={toggleDepartmentStatus.bind(null, d.id)}>
                   <button
                     type="submit"
-                    className="border border-black px-3 py-1 text-xs font-medium uppercase tracking-wide"
+                    className="border border-ink px-3 py-1 text-xs font-medium uppercase tracking-wide"
                   >
                     {d.status === "active" ? "deactivate" : "activate"}
                   </button>
@@ -56,7 +56,7 @@ export default async function DepartmentsPage() {
           ))}
           {(departments ?? []).length === 0 && (
             <tr>
-              <td colSpan={4} className="py-6 text-center text-neutral-500">
+              <td colSpan={4} className="py-6 text-center text-muted">
                 No departments yet.
               </td>
             </tr>

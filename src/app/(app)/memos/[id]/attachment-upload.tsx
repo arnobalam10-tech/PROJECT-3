@@ -33,11 +33,11 @@ export function AttachmentUpload({ memoId }: { memoId: string }) {
       <button
         type="submit"
         disabled={pending}
-        className="border border-black px-3 py-1.5 text-xs font-medium uppercase tracking-wide disabled:opacity-50"
+        className="border border-ink px-3 py-1.5 text-xs font-medium uppercase tracking-wide disabled:opacity-50"
       >
         {pending ? "uploading…" : "upload"}
       </button>
-      {error && <span className="text-sm text-red-700">{error}</span>}
+      {error && <span className="text-sm text-accent">{error}</span>}
     </form>
   );
 }

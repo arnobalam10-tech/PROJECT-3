@@ -17,8 +17,8 @@ export default async function TemplatesPage() {
 
   return (
     <main className="mx-auto max-w-3xl">
-      <h1 className="mb-8 text-3xl font-bold lowercase tracking-tight">workflow templates</h1>
-      <p className="mb-6 text-sm text-neutral-600">
+      <h1 className="mb-8 text-3xl headline">workflow templates</h1>
+      <p className="mb-6 text-sm text-body">
         Reusable ordered position sequences (PRD §18). A template only supplies the initial
         suggested chain — whoever holds a memo built from one can still deviate from it, same as
         any custom workflow.
@@ -33,17 +33,17 @@ export default async function TemplatesPage() {
             position_label: string;
           }[]).slice().sort((a, b) => a.position_order - b.position_order);
           return (
-            <li key={t.id} className="border border-black p-4">
+            <li key={t.id} className="border border-ink p-4">
               <div className="mb-2 flex items-start justify-between">
                 <div>
                   <p className="font-medium">{t.name}</p>
-                  {t.description && <p className="text-sm text-neutral-600">{t.description}</p>}
+                  {t.description && <p className="text-sm text-body">{t.description}</p>}
                 </div>
                 <DeleteTemplateButton templateId={t.id} />
               </div>
               <ol className="flex flex-wrap gap-2 text-xs">
                 {positions.map((p, i) => (
-                  <li key={p.id} className="border border-neutral-400 px-2 py-1">
+                  <li key={p.id} className="border border-rule px-2 py-1">
                     {i + 1}. {p.position_label}
                   </li>
                 ))}
@@ -52,7 +52,7 @@ export default async function TemplatesPage() {
           );
         })}
         {(templates ?? []).length === 0 && (
-          <li className="py-6 text-center text-sm text-neutral-500">No templates yet.</li>
+          <li className="py-6 text-center text-sm text-muted">No templates yet.</li>
         )}
       </ul>
     </main>

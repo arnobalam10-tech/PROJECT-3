@@ -182,18 +182,23 @@ export default async function MemoDetailPage({ params }: { params: Promise<{ id:
     <main className="mx-auto max-w-3xl">
       <div className="mb-8 flex items-start justify-between">
         <div>
-          <p className="mb-1 text-xs font-medium uppercase tracking-wide text-neutral-500">
+          <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted">
             {memo.memo_number} · by {authorName ?? "—"} ·{" "}
-            <span className={memo.priority === "urgent" ? "text-red-700" : ""}>
+            <span
+              className={
+                ["approved", "rejected", "cancelled"].includes(memo.status) ? "" : "text-ink"
+              }
+            >
               {STATUS_LABELS[memo.status] ?? memo.status}
             </span>
+            {memo.priority === "urgent" && <span className="ml-2 text-accent">· urgent</span>}
           </p>
-          <h1 className="text-3xl font-bold lowercase tracking-tight">{memo.subject}</h1>
+          <h1 className="text-3xl headline">{memo.subject}</h1>
         </div>
         <div className="flex items-center gap-3">
           <a
             href={`/memos/${memo.id}/pdf`}
-            className="border border-black px-3 py-1.5 text-xs font-medium uppercase tracking-wide"
+            className="border border-ink px-3 py-1.5 text-xs font-medium uppercase tracking-wide"
           >
             export pdf
           </a>
@@ -229,7 +234,7 @@ export default async function MemoDetailPage({ params }: { params: Promise<{ id:
       )}
 
       <section className="mt-10">
-        <h2 className="mb-3 text-xs font-medium uppercase tracking-wide text-neutral-500">
+        <h2 className="mb-3 text-xs font-medium uppercase tracking-wide text-muted">
           Attachments
         </h2>
         <AttachmentList memoId={memo.id} attachments={attachments ?? []} editable={isDraftEditable} />
@@ -260,23 +265,42 @@ export default async function MemoDetailPage({ params }: { params: Promise<{ id:
 
       {hasBeenSubmitted && (
         <section className="mt-10">
-          <h2 className="mb-3 text-xs font-medium uppercase tracking-wide text-neutral-500">
+          <h2 className="mb-3 text-xs font-medium uppercase tracking-wide text-muted">
             Workflow
           </h2>
-          <ol className="flex flex-col gap-2 text-sm">
-            {(steps ?? []).map((s) => (
-              <li key={s.id} className="flex items-center justify-between border-b border-neutral-300 py-2">
-                <span>
-                  {(s.profiles as unknown as { name: string } | null)?.name ?? "—"}
-                  {!s.is_original && <span className="ml-2 text-xs text-neutral-500">(added)</span>}
-                </span>
+          {/* Square markers on a hairline vertical rule: red for the
+              current/pending step, black for resolved steps, muted
+              outline-only for steps still queued — the one place per this
+              page the accent marks "where the ball currently sits". */}
+          <ol className="flex flex-col text-sm">
+            {(steps ?? []).map((s, i) => (
+              <li key={s.id} className="relative flex gap-4 pb-5 last:pb-0">
+                {i !== (steps ?? []).length - 1 && (
+                  <span aria-hidden className="absolute left-[7px] top-4 bottom-0 w-px bg-rule" />
+                )}
                 <span
-                  className={`text-xs font-medium uppercase tracking-wide ${
-                    s.status === "current" ? "text-red-700" : s.status === "queued" ? "text-neutral-500" : "text-black"
+                  aria-hidden
+                  className={`relative z-10 mt-1 h-3.5 w-3.5 shrink-0 border-2 ${
+                    s.status === "current"
+                      ? "border-accent bg-accent"
+                      : s.status === "queued"
+                        ? "border-muted bg-background"
+                        : "border-ink bg-ink"
                   }`}
-                >
-                  {s.status.replace("_", " ")}
-                </span>
+                />
+                <div className="flex flex-1 items-center justify-between pt-px">
+                  <span>
+                    {(s.profiles as unknown as { name: string } | null)?.name ?? "—"}
+                    {!s.is_original && <span className="ml-2 text-xs text-muted">(added)</span>}
+                  </span>
+                  <span
+                    className={`text-xs font-medium uppercase tracking-wide ${
+                      s.status === "current" ? "text-accent" : s.status === "queued" ? "text-muted" : "text-ink"
+                    }`}
+                  >
+                    {s.status.replace("_", " ")}
+                  </span>
+                </div>
               </li>
             ))}
           </ol>
@@ -285,7 +309,7 @@ export default async function MemoDetailPage({ params }: { params: Promise<{ id:
 
       {(versions ?? []).length > 0 && (
         <section className="mt-10">
-          <h2 className="mb-3 text-xs font-medium uppercase tracking-wide text-neutral-500">
+          <h2 className="mb-3 text-xs font-medium uppercase tracking-wide text-muted">
             Version History
           </h2>
           <VersionHistory
@@ -301,22 +325,28 @@ export default async function MemoDetailPage({ params }: { params: Promise<{ id:
       )}
 
       <section className="mt-10">
-        <h2 className="mb-3 text-xs font-medium uppercase tracking-wide text-neutral-500">
+        <h2 className="mb-3 text-xs font-medium uppercase tracking-wide text-muted">
           Timeline
         </h2>
-        <ol className="flex flex-col gap-3 text-sm">
+        <ol className="flex flex-col text-sm">
           {timeline.map((t, i) => (
-            <li key={i} className="border-l-2 border-black pl-3">
-              <p className="text-xs uppercase tracking-wide text-neutral-500">
-                {t.actorName} · {t.label} · {new Date(t.at).toLocaleString()}
-                {t.onBehalfOfName && (
-                  <span className="normal-case"> (on behalf of {t.onBehalfOfName})</span>
-                )}
-              </p>
-              {t.body && <p className="mt-1">{t.body}</p>}
+            <li key={i} className="relative flex gap-4 pb-4 last:pb-0">
+              {i !== timeline.length - 1 && (
+                <span aria-hidden className="absolute left-[3px] top-3 bottom-0 w-px bg-rule" />
+              )}
+              <span aria-hidden className="relative z-10 mt-1.5 h-1.5 w-1.5 shrink-0 bg-ink" />
+              <div>
+                <p className="text-xs uppercase tracking-wide text-muted">
+                  {t.actorName} · {t.label} · {new Date(t.at).toLocaleString()}
+                  {t.onBehalfOfName && (
+                    <span className="normal-case"> (on behalf of {t.onBehalfOfName})</span>
+                  )}
+                </p>
+                {t.body && <p className="mt-1">{t.body}</p>}
+              </div>
             </li>
           ))}
-          {timeline.length === 0 && <li className="text-neutral-500">No activity yet.</li>}
+          {timeline.length === 0 && <li className="text-muted">No activity yet.</li>}
         </ol>
         <CommentBox memoId={memo.id} />
       </section>

@@ -30,16 +30,16 @@ export function AttachmentList({
   const [pending, startTransition] = useTransition();
 
   if (attachments.length === 0) {
-    return <p className="text-sm text-neutral-500">No attachments.</p>;
+    return <p className="text-sm text-muted">No attachments.</p>;
   }
 
   return (
     <ul className="flex flex-col gap-2 text-sm">
       {attachments.map((a) => (
-        <li key={a.id} className="flex items-center justify-between border-b border-neutral-300 py-2">
+        <li key={a.id} className="flex items-center justify-between border-b border-rule py-2">
           <div>
             <span className="font-medium">{a.file_name}</span>{" "}
-            <span className="text-xs text-neutral-500">
+            <span className="text-xs text-muted">
               {formatBytes(a.file_size)} · {new Date(a.uploaded_at).toLocaleString()}
             </span>
           </div>
@@ -67,7 +67,7 @@ export function AttachmentList({
                     router.refresh();
                   })
                 }
-                className="text-xs font-medium uppercase tracking-wide text-red-700 underline"
+                className="text-xs font-medium uppercase tracking-wide text-accent underline"
               >
                 remove
               </button>

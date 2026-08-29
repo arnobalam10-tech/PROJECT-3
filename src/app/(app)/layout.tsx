@@ -3,6 +3,7 @@ import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { logQueryError } from "@/lib/log-query-error";
 import { logout } from "./actions";
+import { NavLinks } from "./nav-links";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const profile = await requireProfile();
@@ -16,39 +17,21 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="min-h-screen">
-      <header className="flex items-center justify-between border-b-[3px] border-black px-6 py-3">
-        <nav className="flex items-center gap-6 text-xs font-medium uppercase tracking-wide">
-          <Link href="/dashboard" className="text-sm font-bold lowercase tracking-tight">
+      <header className="flex flex-col gap-3 border-b-[3px] border-ink px-6 py-3 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-wrap items-center gap-6">
+          <Link href="/dashboard" className="headline text-lg">
             relay
           </Link>
-          <Link href="/dashboard">Dashboard</Link>
-          <Link href="/inbox">Inbox</Link>
-          <Link href="/memos">My Memos</Link>
-          <Link href="/completed">Completed</Link>
-          <Link href="/search">Search</Link>
-          <Link href="/delegations">Delegations</Link>
-          <Link href="/notifications">
-            Notifications
-            {!!unreadCount && <span className="ml-1 text-red-700">({unreadCount})</span>}
-          </Link>
-          {profile.role === "org_admin" && (
-            <>
-              <Link href="/admin/users">Users</Link>
-              <Link href="/admin/departments">Departments</Link>
-              <Link href="/admin/templates">Templates</Link>
-              <Link href="/admin/reports">Reports</Link>
-              <Link href="/admin/audit-log">Audit Log</Link>
-            </>
-          )}
-        </nav>
+          <NavLinks isAdmin={profile.role === "org_admin"} unreadCount={unreadCount ?? 0} />
+        </div>
         <div className="flex items-center gap-4 text-xs">
-          <span className="uppercase tracking-wide text-neutral-500">
+          <Link href="/profile" className="uppercase tracking-wide text-muted hover:text-ink">
             {profile.name} · {profile.role === "org_admin" ? "Admin" : "User"}
-          </span>
+          </Link>
           <form action={logout}>
             <button
               type="submit"
-              className="border border-black px-3 py-1.5 font-medium uppercase tracking-wide"
+              className="border border-ink px-3 py-1.5 font-medium uppercase tracking-wide"
             >
               Sign out
             </button>

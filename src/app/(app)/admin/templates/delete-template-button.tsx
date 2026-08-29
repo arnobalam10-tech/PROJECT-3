@@ -14,7 +14,7 @@ export function DeleteTemplateButton({ templateId }: { templateId: string }) {
       <button
         type="button"
         onClick={() => setConfirming(true)}
-        className="text-xs font-medium uppercase tracking-wide text-red-700 underline"
+        className="text-xs font-medium uppercase tracking-wide text-accent underline"
       >
         delete
       </button>
@@ -32,7 +32,7 @@ export function DeleteTemplateButton({ templateId }: { templateId: string }) {
             router.refresh();
           })
         }
-        className="font-medium uppercase tracking-wide text-red-700 underline disabled:opacity-50"
+        className="font-medium uppercase tracking-wide text-accent underline disabled:opacity-50"
       >
         confirm delete
       </button>

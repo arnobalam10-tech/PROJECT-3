@@ -37,12 +37,12 @@ export default async function NotificationsPage() {
   return (
     <main className="mx-auto max-w-3xl">
       <div className="mb-8 flex items-center justify-between">
-        <h1 className="text-3xl font-bold lowercase tracking-tight">notifications</h1>
+        <h1 className="text-3xl headline">notifications</h1>
         {unreadCount > 0 && (
           <form action={markAllNotificationsRead}>
             <button
               type="submit"
-              className="border border-black px-3 py-1.5 text-xs font-medium uppercase tracking-wide"
+              className="border border-ink px-3 py-1.5 text-xs font-medium uppercase tracking-wide"
             >
               mark all read
             </button>
@@ -54,14 +54,14 @@ export default async function NotificationsPage() {
         {items.map((n) => (
           <li
             key={n.id}
-            className={`flex items-center justify-between border-b border-neutral-300 py-3 text-sm ${
-              n.is_read ? "text-neutral-500" : ""
+            className={`flex items-center justify-between border-b border-rule py-3 text-sm ${
+              n.is_read ? "text-muted" : ""
             }`}
           >
             <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-neutral-500">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted">
                 {TYPE_LABELS[n.type] ?? n.type} · {new Date(n.created_at).toLocaleString()}
-                {!n.is_read && <span className="ml-2 text-red-700">● unread</span>}
+                {!n.is_read && <span className="ml-2 text-accent">● unread</span>}
               </p>
               <p className="mt-1">
                 {n.memo_id ? (
@@ -76,7 +76,7 @@ export default async function NotificationsPage() {
             {!n.is_read && <MarkReadButton notificationId={n.id} />}
           </li>
         ))}
-        {items.length === 0 && <li className="py-6 text-center text-neutral-500">No notifications yet.</li>}
+        {items.length === 0 && <li className="py-6 text-center text-muted">No notifications yet.</li>}
       </ul>
     </main>
   );

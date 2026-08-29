@@ -27,7 +27,7 @@ export function RichTextEditor({
     editorProps: {
       attributes: {
         class:
-          "min-h-[160px] border border-black px-3 py-2 outline-none prose-sm max-w-none focus:outline-2 focus:outline-black [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_a]:underline",
+          "min-h-[160px] border border-ink px-3 py-2 outline-none prose-sm max-w-none focus:outline-2 focus:outline-ink [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_a]:underline",
       },
     },
     onUpdate: ({ editor }) => {
@@ -58,7 +58,7 @@ export function RichTextEditor({
   return (
     <div>
       {editable && (
-        <div className="mb-1 flex gap-1 border border-b-0 border-black p-1">
+        <div className="mb-1 flex gap-1 border border-b-0 border-ink p-1">
           <ToolbarButton active={editor.isActive("bold")} onClick={() => editor.chain().focus().toggleBold().run()}>
             B
           </ToolbarButton>
@@ -101,7 +101,7 @@ function ToolbarButton({
       type="button"
       onClick={onClick}
       className={`min-w-7 border px-2 py-1 text-xs font-bold ${
-        active ? "border-black bg-black text-white" : "border-transparent text-neutral-700"
+        active ? "border-ink bg-ink text-surface" : "border-transparent text-body"
       }`}
     >
       {children}

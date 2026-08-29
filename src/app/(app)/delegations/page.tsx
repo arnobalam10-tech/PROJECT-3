@@ -54,29 +54,32 @@ export default async function DelegationsPage() {
   const received = items.filter((d) => d.delegate_user_id === profile.id);
 
   function statusBadge(d: Delegation) {
+    // No accent here — a delegation's status is informational (nothing on
+    // this page requires the viewer to act on it right now), so it stays
+    // within the near-black/muted-gray pair per DESIGN.md, never red.
     const s = effectiveStatus(d);
-    const color = s === "active" ? "text-black" : s === "expired" ? "text-neutral-500" : "text-red-700";
+    const color = s === "active" ? "text-ink" : "text-muted";
     return <span className={`text-xs font-medium uppercase tracking-wide ${color}`}>{s}</span>;
   }
 
   return (
     <main className="mx-auto max-w-3xl">
-      <h1 className="mb-8 text-3xl font-bold lowercase tracking-tight">delegations</h1>
+      <h1 className="mb-8 text-3xl headline">delegations</h1>
       <NewDelegationForm members={members ?? []} />
 
       <section className="mb-10">
-        <h2 className="mb-3 text-xs font-medium uppercase tracking-wide text-neutral-500">
+        <h2 className="mb-3 text-xs font-medium uppercase tracking-wide text-muted">
           Delegations I&apos;ve given
         </h2>
         <ul className="flex flex-col gap-2">
           {given.map((d) => (
-            <li key={d.id} className="flex items-center justify-between border border-black px-3 py-2 text-sm">
+            <li key={d.id} className="flex items-center justify-between border border-ink px-3 py-2 text-sm">
               <div>
                 <p>
                   To <span className="font-medium">{d.delegate?.name ?? "—"}</span> ·{" "}
                   {d.start_date} to {d.end_date}
                 </p>
-                {d.reason && <p className="text-xs text-neutral-500">{d.reason}</p>}
+                {d.reason && <p className="text-xs text-muted">{d.reason}</p>}
               </div>
               <div className="flex items-center gap-3">
                 {statusBadge(d)}
@@ -84,28 +87,28 @@ export default async function DelegationsPage() {
               </div>
             </li>
           ))}
-          {given.length === 0 && <li className="py-3 text-sm text-neutral-500">None yet.</li>}
+          {given.length === 0 && <li className="py-3 text-sm text-muted">None yet.</li>}
         </ul>
       </section>
 
       <section>
-        <h2 className="mb-3 text-xs font-medium uppercase tracking-wide text-neutral-500">
+        <h2 className="mb-3 text-xs font-medium uppercase tracking-wide text-muted">
           Delegated to me
         </h2>
         <ul className="flex flex-col gap-2">
           {received.map((d) => (
-            <li key={d.id} className="flex items-center justify-between border border-black px-3 py-2 text-sm">
+            <li key={d.id} className="flex items-center justify-between border border-ink px-3 py-2 text-sm">
               <div>
                 <p>
                   From <span className="font-medium">{d.delegator?.name ?? "—"}</span> ·{" "}
                   {d.start_date} to {d.end_date}
                 </p>
-                {d.reason && <p className="text-xs text-neutral-500">{d.reason}</p>}
+                {d.reason && <p className="text-xs text-muted">{d.reason}</p>}
               </div>
               {statusBadge(d)}
             </li>
           ))}
-          {received.length === 0 && <li className="py-3 text-sm text-neutral-500">None yet.</li>}
+          {received.length === 0 && <li className="py-3 text-sm text-muted">None yet.</li>}
         </ul>
       </section>
     </main>

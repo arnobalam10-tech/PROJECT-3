@@ -1,10 +1,12 @@
 import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
 import { renderTiptapBody } from "./tiptap-to-pdf";
 
-// Palette matches DESIGN.md's Swiss/Basel system: near-black ink, one red
-// accent reserved for the single most attention-worthy state (Rejected —
-// same convention the app UI already uses for urgent priority), muted gray
-// for secondary/meta text. No other hues, no rounded corners/shadows.
+// Palette matches DESIGN.md's Swiss/Basel system: near-black ink, muted gray
+// for secondary/meta text and terminal statuses, and the single red accent
+// reserved for Urgent priority only (see the Phase 10 correction: an export
+// has no "viewing user" whose turn it is, so a terminal status like Rejected
+// is never red here — see statusColor() below). No other hues, no rounded
+// corners/shadows.
 const INK = "#111111";
 const MUTED = "#8A867E";
 const RED = "#E32213";
@@ -37,10 +39,13 @@ const STATUS_LABELS: Record<string, string> = {
   cancelled: "Cancelled",
 };
 
+// A static export has no "viewing user" whose turn it is — there's no
+// act-now signal to give red to here. Per DESIGN.md: near-black for
+// neutral/in-progress, muted gray for anything terminal/completed
+// (approved, rejected, cancelled). Draft counts as neutral, not terminal.
 function statusColor(status: string) {
-  if (status === "rejected") return RED;
-  if (status === "approved") return INK;
-  return MUTED;
+  if (status === "approved" || status === "rejected" || status === "cancelled") return MUTED;
+  return INK;
 }
 
 export type MemoPdfData = {

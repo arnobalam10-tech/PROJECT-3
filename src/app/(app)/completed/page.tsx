@@ -40,10 +40,10 @@ export default async function CompletedPage() {
 
   return (
     <main className="mx-auto max-w-5xl">
-      <h1 className="mb-8 text-3xl font-bold lowercase tracking-tight">completed</h1>
+      <h1 className="headline mb-8 text-3xl">completed</h1>
       <table className="w-full border-collapse text-sm">
         <thead>
-          <tr className="border-b border-black text-left text-xs uppercase tracking-wide text-neutral-500">
+          <tr className="border-b border-ink text-left text-xs uppercase tracking-wide text-muted">
             <th className="py-2">Number</th>
             <th className="py-2">Subject</th>
             <th className="py-2">Author</th>
@@ -54,7 +54,7 @@ export default async function CompletedPage() {
         </thead>
         <tbody>
           {rows.map((m) => (
-            <tr key={m.id} className="border-b border-neutral-300">
+            <tr key={m.id} className="border-b border-rule">
               <td className="py-3 font-mono text-xs">{m.memo_number}</td>
               <td className="py-3">
                 <Link href={`/memos/${m.id}`} className="font-medium underline">
@@ -62,22 +62,27 @@ export default async function CompletedPage() {
                 </Link>
               </td>
               <td className="py-3">{m.profiles?.name ?? "—"}</td>
-              <td
-                className={`py-3 text-xs font-medium uppercase tracking-wide ${
-                  m.status === "rejected" ? "text-red-700" : ""
-                }`}
-              >
+              {/* Terminal states are informational, not actionable — muted
+                  gray per DESIGN.md, never the accent (that's reserved for
+                  what still needs the viewer's action right now). */}
+              <td className="py-3 text-xs font-medium uppercase tracking-wide text-muted">
                 {STATUS_LABELS[m.status] ?? m.status}
               </td>
-              <td className="py-3 text-xs font-medium uppercase tracking-wide">{m.priority}</td>
-              <td className="py-3 text-neutral-600">
+              <td
+                className={`py-3 text-xs font-medium uppercase tracking-wide ${
+                  m.priority === "urgent" ? "text-accent" : ""
+                }`}
+              >
+                {m.priority}
+              </td>
+              <td className="py-3 text-body">
                 {m.completed_at ? new Date(m.completed_at).toLocaleString() : "—"}
               </td>
             </tr>
           ))}
           {rows.length === 0 && (
             <tr>
-              <td colSpan={6} className="py-6 text-center text-neutral-500">
+              <td colSpan={6} className="py-6 text-center text-muted">
                 No completed workflows yet.
               </td>
             </tr>

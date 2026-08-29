@@ -23,40 +23,40 @@ export function InviteUserForm({
   return (
     <form ref={formRef} action={formAction} className="mb-10 flex flex-wrap items-end gap-3">
       <label className="flex flex-col gap-1">
-        <span className="text-xs font-medium uppercase tracking-wide text-neutral-500">Name</span>
+        <span className="text-xs font-medium uppercase tracking-wide text-muted">Name</span>
         <input
           type="text"
           name="name"
           required
-          className="border border-black px-3 py-2 outline-none focus:outline-2 focus:outline-black"
+          className="border border-ink px-3 py-2 outline-none focus:outline-2 focus:outline-ink"
         />
       </label>
       <label className="flex flex-col gap-1">
-        <span className="text-xs font-medium uppercase tracking-wide text-neutral-500">Email</span>
+        <span className="text-xs font-medium uppercase tracking-wide text-muted">Email</span>
         <input
           type="email"
           name="email"
           required
-          className="border border-black px-3 py-2 outline-none focus:outline-2 focus:outline-black"
+          className="border border-ink px-3 py-2 outline-none focus:outline-2 focus:outline-ink"
         />
       </label>
       <label className="flex flex-col gap-1">
-        <span className="text-xs font-medium uppercase tracking-wide text-neutral-500">
+        <span className="text-xs font-medium uppercase tracking-wide text-muted">
           Designation
         </span>
         <input
           type="text"
           name="designation"
-          className="border border-black px-3 py-2 outline-none focus:outline-2 focus:outline-black"
+          className="border border-ink px-3 py-2 outline-none focus:outline-2 focus:outline-ink"
         />
       </label>
       <label className="flex flex-col gap-1">
-        <span className="text-xs font-medium uppercase tracking-wide text-neutral-500">
+        <span className="text-xs font-medium uppercase tracking-wide text-muted">
           Department
         </span>
         <select
           name="department_id"
-          className="border border-black bg-white px-3 py-2 outline-none focus:outline-2 focus:outline-black"
+          className="border border-ink bg-surface px-3 py-2 outline-none focus:outline-2 focus:outline-ink"
         >
           <option value="">—</option>
           {departments.map((d) => (
@@ -67,11 +67,11 @@ export function InviteUserForm({
         </select>
       </label>
       <label className="flex flex-col gap-1">
-        <span className="text-xs font-medium uppercase tracking-wide text-neutral-500">Role</span>
+        <span className="text-xs font-medium uppercase tracking-wide text-muted">Role</span>
         <select
           name="role"
           defaultValue="regular_user"
-          className="border border-black bg-white px-3 py-2 outline-none focus:outline-2 focus:outline-black"
+          className="border border-ink bg-surface px-3 py-2 outline-none focus:outline-2 focus:outline-ink"
         >
           <option value="regular_user">Regular user</option>
           <option value="org_admin">Org admin</option>
@@ -80,12 +80,12 @@ export function InviteUserForm({
       <button
         type="submit"
         disabled={pending}
-        className="bg-black px-4 py-2 font-medium text-white disabled:opacity-50"
+        className="bg-ink px-4 py-2 font-medium text-surface disabled:opacity-50"
       >
         {pending ? "inviting…" : "invite user"}
       </button>
-      {state.error && <p className="w-full text-sm text-red-700">{state.error}</p>}
-      {state.success && <p className="w-full text-sm text-neutral-700">{state.success}</p>}
+      {state.error && <p className="w-full text-sm text-accent">{state.error}</p>}
+      {state.success && <p className="w-full text-sm text-body">{state.success}</p>}
     </form>
   );
 }

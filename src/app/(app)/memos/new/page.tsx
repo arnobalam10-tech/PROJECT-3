@@ -29,7 +29,7 @@ export default async function NewMemoPage() {
 
   return (
     <main className="mx-auto max-w-3xl">
-      <h1 className="mb-8 text-3xl font-bold lowercase tracking-tight">new memo</h1>
+      <h1 className="mb-8 text-3xl headline">new memo</h1>
       <MemoForm mode="create" departments={departments ?? []} categories={categories ?? []} />
     </main>
   );

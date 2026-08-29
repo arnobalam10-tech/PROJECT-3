@@ -122,16 +122,16 @@ export default async function InboxPage({
 
   return (
     <main className="mx-auto max-w-5xl">
-      <h1 className="mb-8 text-3xl font-bold lowercase tracking-tight">inbox</h1>
+      <h1 className="mb-8 text-3xl headline">inbox</h1>
 
       <form className="mb-6 flex flex-wrap gap-3 text-sm" action="/inbox">
-        <select name="priority" defaultValue={params.priority ?? ""} className="border border-black bg-white px-3 py-2">
+        <select name="priority" defaultValue={params.priority ?? ""} className="border border-ink bg-surface px-3 py-2">
           <option value="">All priorities</option>
           <option value="normal">Normal</option>
           <option value="high">High</option>
           <option value="urgent">Urgent</option>
         </select>
-        <select name="department" defaultValue={params.department ?? ""} className="border border-black bg-white px-3 py-2">
+        <select name="department" defaultValue={params.department ?? ""} className="border border-ink bg-surface px-3 py-2">
           <option value="">All departments</option>
           {(departments ?? []).map((d) => (
             <option key={d.id} value={d.id}>
@@ -139,14 +139,14 @@ export default async function InboxPage({
             </option>
           ))}
         </select>
-        <button type="submit" className="border border-black px-3 py-2 font-medium">
+        <button type="submit" className="border border-ink px-3 py-2 font-medium">
           filter
         </button>
       </form>
 
       <table className="w-full border-collapse text-sm">
         <thead>
-          <tr className="border-b border-black text-left text-xs uppercase tracking-wide text-neutral-500">
+          <tr className="border-b border-ink text-left text-xs uppercase tracking-wide text-muted">
             <th className="py-2">Number</th>
             <th className="py-2">Subject</th>
             <th className="py-2">Sender</th>
@@ -160,14 +160,14 @@ export default async function InboxPage({
         </thead>
         <tbody>
           {items.map((row) => (
-            <tr key={row.id} className="border-b border-neutral-300">
+            <tr key={row.id} className="border-b border-rule">
               <td className="py-3 font-mono text-xs">{row.memos.memo_number}</td>
               <td className="py-3">
                 <Link href={`/memos/${row.memos.id}`} className="font-medium underline">
                   {row.memos.subject}
                 </Link>
                 {row.assigned_user_id !== profile.id && (
-                  <span className="ml-2 text-xs text-neutral-500">
+                  <span className="ml-2 text-xs text-muted">
                     (as delegate for {delegatorNameById.get(row.assigned_user_id) ?? "—"})
                   </span>
                 )}
@@ -176,22 +176,22 @@ export default async function InboxPage({
               <td className="py-3">{row.memos.departments?.name ?? "—"}</td>
               <td className="py-3 text-xs font-medium uppercase tracking-wide">
                 {row.memos.priority === "urgent" ? (
-                  <span className="text-red-700">{row.memos.priority}</span>
+                  <span className="text-accent">{row.memos.priority}</span>
                 ) : (
                   row.memos.priority
                 )}
               </td>
               <td className="py-3 text-xs font-medium uppercase tracking-wide">{row.memos.status}</td>
-              <td className="py-3 text-neutral-600">
+              <td className="py-3 text-body">
                 {row.memos.submitted_at ? new Date(row.memos.submitted_at).toLocaleDateString() : "—"}
               </td>
-              <td className="py-3 text-xs font-medium uppercase tracking-wide text-red-700">Review &amp; decide</td>
-              <td className="py-3 text-neutral-600">{formatAge(row.updated_at)}</td>
+              <td className="py-3 text-xs font-medium uppercase tracking-wide text-accent">Review &amp; decide</td>
+              <td className="py-3 text-body">{formatAge(row.updated_at)}</td>
             </tr>
           ))}
           {items.length === 0 && (
             <tr>
-              <td colSpan={9} className="py-6 text-center text-neutral-500">
+              <td colSpan={9} className="py-6 text-center text-muted">
                 Nothing awaiting your action.
               </td>
             </tr>

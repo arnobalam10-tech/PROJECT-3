@@ -21,14 +21,14 @@ export function CommentBox({ memoId }: { memoId: string }) {
         name="body"
         placeholder="Add a comment"
         rows={2}
-        className="border border-black px-3 py-2 text-sm"
+        className="border border-ink px-3 py-2 text-sm"
       />
-      {state.error && <p className="text-sm text-red-700">{state.error}</p>}
+      {state.error && <p className="text-sm text-accent">{state.error}</p>}
       <div>
         <button
           type="submit"
           disabled={pending}
-          className="border border-black px-3 py-1.5 text-xs font-medium uppercase tracking-wide disabled:opacity-50"
+          className="border border-ink px-3 py-1.5 text-xs font-medium uppercase tracking-wide disabled:opacity-50"
         >
           {pending ? "posting…" : "post comment"}
         </button>

@@ -18,12 +18,12 @@ export function ActionPanel({
   const [mode, setMode] = useState<Mode>(null);
 
   return (
-    <section className="mt-10 border-[3px] border-black p-4">
-      <h2 className="mb-3 text-xs font-medium uppercase tracking-wide text-neutral-500">
+    <section className="mt-10 border-[3px] border-ink p-4">
+      <h2 className="mb-3 text-xs font-medium uppercase tracking-wide text-muted">
         This memo requires your action
       </h2>
       {actingOnBehalfOf && (
-        <p className="mb-3 border border-black bg-neutral-100 px-3 py-2 text-sm">
+        <p className="mb-3 border border-ink bg-background px-3 py-2 text-sm">
           You are acting as an active delegate for <strong>{actingOnBehalfOf}</strong>. This
           action will be recorded as taken by you on their behalf.
         </p>
@@ -34,28 +34,28 @@ export function ActionPanel({
           <button
             type="button"
             onClick={() => setMode("approve")}
-            className="bg-black px-4 py-2 text-sm font-medium text-white"
+            className="bg-ink px-4 py-2 text-sm font-medium text-surface"
           >
             approve
           </button>
           <button
             type="button"
             onClick={() => setMode("decline")}
-            className="border border-black px-4 py-2 text-sm font-medium"
+            className="border border-ink px-4 py-2 text-sm font-medium"
           >
             decline &amp; reroute
           </button>
           <button
             type="button"
             onClick={() => setMode("changes")}
-            className="border border-black px-4 py-2 text-sm font-medium"
+            className="border border-ink px-4 py-2 text-sm font-medium"
           >
             request changes
           </button>
           <button
             type="button"
             onClick={() => setMode("reject")}
-            className="border border-black px-4 py-2 text-sm font-medium text-red-700"
+            className="border border-ink px-4 py-2 text-sm font-medium text-accent"
           >
             reject
           </button>
@@ -98,7 +98,7 @@ function ApproveForm({ memoId, members, onCancel }: { memoId: string; members: M
           <select
             name="forward_to_user_id"
             required
-            className="border border-black bg-white px-3 py-2 text-sm"
+            className="border border-ink bg-surface px-3 py-2 text-sm"
           >
             <option value="">Choose a person…</option>
             {members.map((m) => (
@@ -112,15 +112,15 @@ function ApproveForm({ memoId, members, onCancel }: { memoId: string; members: M
       <textarea
         name="comment"
         placeholder="Optional comment"
-        className="border border-black px-3 py-2 text-sm"
+        className="border border-ink px-3 py-2 text-sm"
         rows={3}
       />
-      {state.error && <p className="text-sm text-red-700">{state.error}</p>}
+      {state.error && <p className="text-sm text-accent">{state.error}</p>}
       <div className="flex gap-2">
-        <button type="submit" disabled={pending} className="bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+        <button type="submit" disabled={pending} className="bg-ink px-4 py-2 text-sm font-medium text-surface disabled:opacity-50">
           {pending ? "approving…" : "confirm approve"}
         </button>
-        <button type="button" onClick={onCancel} className="border border-black px-4 py-2 text-sm font-medium">
+        <button type="button" onClick={onCancel} className="border border-ink px-4 py-2 text-sm font-medium">
           cancel
         </button>
       </div>
@@ -136,7 +136,7 @@ function DeclineForm({ memoId, members, onCancel }: { memoId: string; members: M
       <input type="hidden" name="memo_id" value={memoId} />
       <label className="flex flex-col gap-1 text-sm">
         Reroute to
-        <select name="new_holder_id" required className="border border-black bg-white px-3 py-2">
+        <select name="new_holder_id" required className="border border-ink bg-surface px-3 py-2">
           <option value="">Choose a person…</option>
           {members.map((m) => (
             <option key={m.id} value={m.id}>
@@ -148,15 +148,15 @@ function DeclineForm({ memoId, members, onCancel }: { memoId: string; members: M
       <textarea
         name="comment"
         placeholder="Optional note (e.g. why this isn't yours to review)"
-        className="border border-black px-3 py-2 text-sm"
+        className="border border-ink px-3 py-2 text-sm"
         rows={3}
       />
-      {state.error && <p className="text-sm text-red-700">{state.error}</p>}
+      {state.error && <p className="text-sm text-accent">{state.error}</p>}
       <div className="flex gap-2">
-        <button type="submit" disabled={pending} className="bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+        <button type="submit" disabled={pending} className="bg-ink px-4 py-2 text-sm font-medium text-surface disabled:opacity-50">
           {pending ? "rerouting…" : "confirm decline & reroute"}
         </button>
-        <button type="button" onClick={onCancel} className="border border-black px-4 py-2 text-sm font-medium">
+        <button type="button" onClick={onCancel} className="border border-ink px-4 py-2 text-sm font-medium">
           cancel
         </button>
       </div>
@@ -174,15 +174,15 @@ function RejectForm({ memoId, onCancel }: { memoId: string; onCancel: () => void
         name="reason"
         required
         placeholder="Reason (required)"
-        className="border border-black px-3 py-2 text-sm"
+        className="border border-ink px-3 py-2 text-sm"
         rows={3}
       />
-      {state.error && <p className="text-sm text-red-700">{state.error}</p>}
+      {state.error && <p className="text-sm text-accent">{state.error}</p>}
       <div className="flex gap-2">
-        <button type="submit" disabled={pending} className="border border-red-700 px-4 py-2 text-sm font-medium text-red-700 disabled:opacity-50">
+        <button type="submit" disabled={pending} className="border border-accent px-4 py-2 text-sm font-medium text-accent disabled:opacity-50">
           {pending ? "rejecting…" : "confirm reject"}
         </button>
-        <button type="button" onClick={onCancel} className="border border-black px-4 py-2 text-sm font-medium">
+        <button type="button" onClick={onCancel} className="border border-ink px-4 py-2 text-sm font-medium">
           cancel
         </button>
       </div>
@@ -200,15 +200,15 @@ function ChangesForm({ memoId, onCancel }: { memoId: string; onCancel: () => voi
         name="explanation"
         required
         placeholder="Explanation (required)"
-        className="border border-black px-3 py-2 text-sm"
+        className="border border-ink px-3 py-2 text-sm"
         rows={3}
       />
-      {state.error && <p className="text-sm text-red-700">{state.error}</p>}
+      {state.error && <p className="text-sm text-accent">{state.error}</p>}
       <div className="flex gap-2">
-        <button type="submit" disabled={pending} className="bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+        <button type="submit" disabled={pending} className="bg-ink px-4 py-2 text-sm font-medium text-surface disabled:opacity-50">
           {pending ? "sending…" : "confirm request changes"}
         </button>
-        <button type="button" onClick={onCancel} className="border border-black px-4 py-2 text-sm font-medium">
+        <button type="button" onClick={onCancel} className="border border-ink px-4 py-2 text-sm font-medium">
           cancel
         </button>
       </div>

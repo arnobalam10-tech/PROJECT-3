@@ -29,11 +29,11 @@ export default async function UsersPage() {
 
   return (
     <main className="mx-auto max-w-5xl">
-      <h1 className="mb-8 text-3xl font-bold lowercase tracking-tight">users</h1>
+      <h1 className="mb-8 text-3xl headline">users</h1>
       <InviteUserForm departments={departments ?? []} />
       <table className="w-full border-collapse text-sm">
         <thead>
-          <tr className="border-b border-black text-left text-xs uppercase tracking-wide text-neutral-500">
+          <tr className="border-b border-ink text-left text-xs uppercase tracking-wide text-muted">
             <th className="py-2">Name</th>
             <th className="py-2">Email</th>
             <th className="py-2">Designation</th>
@@ -43,14 +43,14 @@ export default async function UsersPage() {
         </thead>
         <tbody>
           {(users ?? []).map((u) => (
-            <tr key={u.id} className="border-b border-neutral-300 align-middle">
+            <tr key={u.id} className="border-b border-rule align-middle">
               <td className="py-3 font-medium">{u.name}</td>
-              <td className="py-3 text-neutral-600">{u.email}</td>
-              <td className="py-3 text-neutral-600">{u.designation ?? "—"}</td>
+              <td className="py-3 text-body">{u.email}</td>
+              <td className="py-3 text-body">{u.designation ?? "—"}</td>
               <td className="py-3">
                 <span
                   className={`text-xs font-medium uppercase tracking-wide ${
-                    u.status === "active" ? "text-black" : "text-neutral-500"
+                    u.status === "active" ? "text-ink" : "text-muted"
                   }`}
                 >
                   {u.status}

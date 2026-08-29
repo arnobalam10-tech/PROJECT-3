@@ -43,41 +43,41 @@ export function NewTemplateForm() {
   }
 
   return (
-    <form ref={formRef} action={formAction} className="mb-8 flex flex-col gap-3 border border-black p-4">
+    <form ref={formRef} action={formAction} className="mb-8 flex flex-col gap-3 border border-ink p-4">
       <div className="flex flex-wrap gap-3">
         <label className="flex flex-1 min-w-[12rem] flex-col gap-1">
-          <span className="text-xs font-medium uppercase tracking-wide text-neutral-500">Name</span>
-          <input type="text" name="name" required className="border border-black px-3 py-2" />
+          <span className="text-xs font-medium uppercase tracking-wide text-muted">Name</span>
+          <input type="text" name="name" required className="border border-ink px-3 py-2" />
         </label>
         <label className="flex flex-1 min-w-[12rem] flex-col gap-1">
-          <span className="text-xs font-medium uppercase tracking-wide text-neutral-500">
+          <span className="text-xs font-medium uppercase tracking-wide text-muted">
             Description
           </span>
-          <input type="text" name="description" className="border border-black px-3 py-2" />
+          <input type="text" name="description" className="border border-ink px-3 py-2" />
         </label>
       </div>
 
       <div>
-        <span className="mb-2 block text-xs font-medium uppercase tracking-wide text-neutral-500">
+        <span className="mb-2 block text-xs font-medium uppercase tracking-wide text-muted">
           Ordered positions (e.g. &quot;Employee&quot;, &quot;Dept Head&quot;, &quot;Finance&quot;)
         </span>
         <div className="flex flex-col gap-2">
           {positions.map((value, i) => (
             <div key={i} className="flex items-center gap-2">
-              <span className="w-5 text-sm text-neutral-500">{i + 1}.</span>
+              <span className="w-5 text-sm text-muted">{i + 1}.</span>
               <input
                 type="text"
                 name="position_label"
                 value={value}
                 onChange={(e) => updatePosition(i, e.target.value)}
                 placeholder="Position label"
-                className="flex-1 border border-black px-3 py-2 text-sm"
+                className="flex-1 border border-ink px-3 py-2 text-sm"
               />
               {positions.length > 1 && (
                 <button
                   type="button"
                   onClick={() => removePosition(i)}
-                  className="text-xs font-medium uppercase tracking-wide text-red-700 underline"
+                  className="text-xs font-medium uppercase tracking-wide text-accent underline"
                 >
                   remove
                 </button>
@@ -88,17 +88,17 @@ export function NewTemplateForm() {
         <button
           type="button"
           onClick={addPosition}
-          className="mt-2 border border-black px-3 py-1.5 text-xs font-medium uppercase tracking-wide"
+          className="mt-2 border border-ink px-3 py-1.5 text-xs font-medium uppercase tracking-wide"
         >
           add position
         </button>
       </div>
 
-      {state.error && <p className="text-sm text-red-700">{state.error}</p>}
+      {state.error && <p className="text-sm text-accent">{state.error}</p>}
       <button
         type="submit"
         disabled={pending}
-        className="self-start bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+        className="self-start bg-ink px-4 py-2 text-sm font-medium text-surface disabled:opacity-50"
       >
         {pending ? "creating…" : "create template"}
       </button>

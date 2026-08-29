@@ -47,7 +47,7 @@ export function MemoForm({
       <input type="hidden" name="body" value={JSON.stringify(body)} />
 
       <label className="flex flex-col gap-1">
-        <span className="text-xs font-medium uppercase tracking-wide text-neutral-500">
+        <span className="text-xs font-medium uppercase tracking-wide text-muted">
           Subject
         </span>
         <input
@@ -55,19 +55,19 @@ export function MemoForm({
           name="subject"
           required
           defaultValue={memo?.subject}
-          className="border border-black px-3 py-2 outline-none focus:outline-2 focus:outline-black"
+          className="border border-ink px-3 py-2 outline-none focus:outline-2 focus:outline-ink"
         />
       </label>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium uppercase tracking-wide text-neutral-500">
+          <span className="text-xs font-medium uppercase tracking-wide text-muted">
             Department
           </span>
           <select
             name="department_id"
             defaultValue={memo?.department_id ?? ""}
-            className="border border-black bg-white px-3 py-2"
+            className="border border-ink bg-surface px-3 py-2"
           >
             <option value="">—</option>
             {departments.map((d) => (
@@ -78,13 +78,13 @@ export function MemoForm({
           </select>
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium uppercase tracking-wide text-neutral-500">
+          <span className="text-xs font-medium uppercase tracking-wide text-muted">
             Category
           </span>
           <select
             name="category_id"
             defaultValue={memo?.category_id ?? ""}
-            className="border border-black bg-white px-3 py-2"
+            className="border border-ink bg-surface px-3 py-2"
           >
             <option value="">—</option>
             {categories.map((c) => (
@@ -95,13 +95,13 @@ export function MemoForm({
           </select>
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium uppercase tracking-wide text-neutral-500">
+          <span className="text-xs font-medium uppercase tracking-wide text-muted">
             Priority
           </span>
           <select
             name="priority"
             defaultValue={memo?.priority ?? "normal"}
-            className="border border-black bg-white px-3 py-2"
+            className="border border-ink bg-surface px-3 py-2"
           >
             <option value="normal">Normal</option>
             <option value="high">High</option>
@@ -111,17 +111,17 @@ export function MemoForm({
       </div>
 
       <div className="flex flex-col gap-1">
-        <span className="text-xs font-medium uppercase tracking-wide text-neutral-500">Body</span>
+        <span className="text-xs font-medium uppercase tracking-wide text-muted">Body</span>
         <RichTextEditor content={body} onChange={setBody} />
       </div>
 
-      {state.error && <p className="text-sm text-red-700">{state.error}</p>}
+      {state.error && <p className="text-sm text-accent">{state.error}</p>}
 
       <div>
         <button
           type="submit"
           disabled={pending}
-          className="bg-black px-4 py-2 font-medium text-white disabled:opacity-50"
+          className="bg-ink px-4 py-2 font-medium text-surface disabled:opacity-50"
         >
           {pending ? "saving…" : mode === "create" ? "create draft" : "save draft"}
         </button>

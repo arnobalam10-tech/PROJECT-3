@@ -122,12 +122,12 @@ export default async function DashboardPage() {
 
   return (
     <main className="mx-auto max-w-5xl">
-      <h1 className="mb-1 text-3xl font-bold lowercase tracking-tight">dashboard</h1>
-      <p className="mb-8 text-sm text-neutral-600">
+      <h1 className="mb-1 text-3xl headline">dashboard</h1>
+      <p className="mb-8 text-sm text-body">
         {profile.name} · {org?.name} · {profile.role === "org_admin" ? "Admin" : "User"}
       </p>
 
-      <h2 className="mb-3 text-xs font-medium uppercase tracking-wide text-neutral-500">Your activity</h2>
+      <h2 className="mb-3 text-xs font-medium uppercase tracking-wide text-muted">Your activity</h2>
       <div className="mb-10 grid grid-cols-2 gap-4 sm:grid-cols-4">
         <StatTile label="Awaiting your action" value={inboxCount} href="/inbox" />
         <StatTile label="Urgent, awaiting you" value={urgentInboxCount} accent href="/inbox?priority=urgent" />
@@ -137,33 +137,34 @@ export default async function DashboardPage() {
 
       <div className="mb-10 grid grid-cols-1 gap-8 sm:grid-cols-2">
         <div>
-          <h2 className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-500">
+          <h2 className="mb-3 text-xs font-medium uppercase tracking-wide text-muted">
             Your memos by status
           </h2>
-          <table className="w-full border-collapse text-sm">
-            <tbody>
-              {[...myStatusCounts.entries()].map(([status, count]) => (
-                <tr key={status} className="border-b border-neutral-300">
-                  <td className="py-2">{STATUS_LABELS[status] ?? status}</td>
-                  <td className="py-2 text-right font-medium">{count}</td>
-                </tr>
-              ))}
-              {myStatusCounts.size === 0 && (
-                <tr>
-                  <td className="py-2 text-neutral-500">No memos yet.</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+          <div className="flex flex-col gap-2.5 border-t-4 border-ink pt-3">
+            {(() => {
+              const entries = [...myStatusCounts.entries()];
+              const max = Math.max(1, ...entries.map(([, c]) => c));
+              return entries.map(([status, count]) => (
+                <div key={status} className="flex items-center gap-3 text-sm">
+                  <span className="w-32 shrink-0 truncate">{STATUS_LABELS[status] ?? status}</span>
+                  <div className="h-3 flex-1 bg-rule/40">
+                    <div className="h-3 bg-ink" style={{ width: `${(count / max) * 100}%` }} />
+                  </div>
+                  <span className="w-6 shrink-0 text-right font-medium">{count}</span>
+                </div>
+              ));
+            })()}
+            {myStatusCounts.size === 0 && <p className="text-sm text-muted">No memos yet.</p>}
+          </div>
         </div>
 
         <div>
-          <h2 className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-500">
+          <h2 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">
             Recent activity (your notifications)
           </h2>
           <ul className="flex flex-col gap-2 text-sm">
             {(recentNotifs ?? []).map((n) => (
-              <li key={n.id} className="border-b border-neutral-300 py-2">
+              <li key={n.id} className="border-b border-rule py-2">
                 {n.memo_id ? (
                   <Link href={`/memos/${n.memo_id}`} className="underline">
                     {n.message}
@@ -171,17 +172,17 @@ export default async function DashboardPage() {
                 ) : (
                   n.message
                 )}
-                <p className="text-xs text-neutral-500">{new Date(n.created_at).toLocaleString()}</p>
+                <p className="text-xs text-muted">{new Date(n.created_at).toLocaleString()}</p>
               </li>
             ))}
-            {(recentNotifs ?? []).length === 0 && <li className="text-neutral-500">Nothing yet.</li>}
+            {(recentNotifs ?? []).length === 0 && <li className="text-muted">Nothing yet.</li>}
           </ul>
         </div>
       </div>
 
       {adminStats && (
         <>
-          <h2 className="mb-3 text-xs font-medium uppercase tracking-wide text-neutral-500">
+          <h2 className="mb-3 text-xs font-medium uppercase tracking-wide text-muted">
             Organization (admin)
           </h2>
           <div className="mb-10 grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -195,20 +196,20 @@ export default async function DashboardPage() {
           </div>
 
           <div>
-            <h2 className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-500">
+            <h2 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">
               Recent system activity
             </h2>
             <ul className="flex flex-col gap-2 text-sm">
               {adminStats.recentActivity.map((a, i) => (
-                <li key={i} className="border-b border-neutral-300 py-2">
-                  <span className="text-xs font-medium uppercase tracking-wide text-neutral-500">
+                <li key={i} className="border-b border-rule py-2">
+                  <span className="text-xs font-medium uppercase tracking-wide text-muted">
                     {a.event_type}
                   </span>{" "}
                   · {a.description}
-                  <p className="text-xs text-neutral-500">{new Date(a.created_at).toLocaleString()}</p>
+                  <p className="text-xs text-muted">{new Date(a.created_at).toLocaleString()}</p>
                 </li>
               ))}
-              {adminStats.recentActivity.length === 0 && <li className="text-neutral-500">Nothing yet.</li>}
+              {adminStats.recentActivity.length === 0 && <li className="text-muted">Nothing yet.</li>}
             </ul>
           </div>
         </>
@@ -219,9 +220,18 @@ export default async function DashboardPage() {
 
 function StatTile({ label, value, accent, href }: { label: string; value: number; accent?: boolean; href: string }) {
   return (
-    <Link href={href} className="block border border-black p-4 hover:bg-neutral-50">
-      <p className="text-xs font-medium uppercase tracking-wide text-neutral-500">{label}</p>
-      <p className={`mt-1 text-3xl font-bold ${accent ? "text-red-700" : ""}`}>{value.toLocaleString()}</p>
+    <Link
+      href={href}
+      className="group block border border-ink bg-surface p-4 transition-colors hover:bg-ink"
+    >
+      <p className="text-xs font-medium uppercase tracking-wide text-muted group-hover:text-surface/70">
+        {label}
+      </p>
+      <p
+        className={`mt-1 text-3xl font-bold group-hover:text-surface ${accent ? "text-accent" : ""}`}
+      >
+        {value.toLocaleString()}
+      </p>
     </Link>
   );
 }
