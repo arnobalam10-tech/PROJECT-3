@@ -11,6 +11,7 @@ import { SubmitPanel } from "./submit-panel";
 import { ActionPanel } from "./action-panel";
 import { ResubmitButton } from "./resubmit-button";
 import { CommentBox } from "./comment-box";
+import { VersionHistory } from "./version-history";
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "Draft",
@@ -27,6 +28,7 @@ type TimelineEntry = {
   kind: "step" | "comment";
   at: string;
   actorName: string;
+  onBehalfOfName: string | null;
   label: string;
   body: string | null;
 };
@@ -61,6 +63,8 @@ export default async function MemoDetailPage({ params }: { params: Promise<{ id:
     { data: members, error: membersError },
     { data: steps, error: stepsError },
     { data: comments, error: commentsError },
+    { data: versions, error: versionsError },
+    { data: templates, error: templatesError },
   ] = await Promise.all([
       supabase.from("departments").select("id, name").eq("organization_id", profile.organization_id).eq("status", "active").order("name"),
       supabase.from("memo_categories").select("id, name").eq("organization_id", profile.organization_id).eq("is_active", true).order("name"),
@@ -68,14 +72,28 @@ export default async function MemoDetailPage({ params }: { params: Promise<{ id:
       supabase.from("profiles").select("id, name").eq("organization_id", profile.organization_id).eq("status", "active").order("name"),
       supabase
         .from("workflow_steps")
-        .select("id, sequence_order, assigned_user_id, status, action_taken, comment, is_original, added_by, acted_at, profiles!workflow_steps_assigned_user_id_fkey(name)")
+        .select(
+          "id, sequence_order, assigned_user_id, status, action_taken, comment, is_original, added_by, acted_at, acted_by, profiles!workflow_steps_assigned_user_id_fkey(name), acted_by_profile:profiles!workflow_steps_acted_by_fkey(name)",
+        )
         .eq("memo_id", id)
         .order("sequence_order"),
       supabase
         .from("comments")
-        .select("id, body, comment_type, created_at, profiles!comments_author_id_fkey(name)")
+        .select(
+          "id, body, comment_type, created_at, on_behalf_of_user_id, profiles!comments_author_id_fkey(name), on_behalf_of:profiles!comments_on_behalf_of_user_id_fkey(name)",
+        )
         .eq("memo_id", id)
         .order("created_at"),
+      supabase
+        .from("memo_versions")
+        .select("id, version_number, editor_id, content_snapshot, associated_submission_at, profiles!memo_versions_editor_id_fkey(name)")
+        .eq("memo_id", id)
+        .order("version_number"),
+      supabase
+        .from("workflow_templates")
+        .select("id, name, workflow_template_positions(id, position_order, position_label)")
+        .eq("organization_id", profile.organization_id)
+        .order("name"),
     ]);
   logQueryError("memo-detail.departments", departmentsError);
   logQueryError("memo-detail.categories", categoriesError);
@@ -83,9 +101,34 @@ export default async function MemoDetailPage({ params }: { params: Promise<{ id:
   logQueryError("memo-detail.members", membersError);
   logQueryError("memo-detail.steps", stepsError);
   logQueryError("memo-detail.comments", commentsError);
+  logQueryError("memo-detail.versions", versionsError);
+  logQueryError("memo-detail.templates", templatesError);
 
   const currentStep = (steps ?? []).find((s) => s.status === "current");
-  const isCurrentHolder = currentStep?.assigned_user_id === profile.id;
+  const isDirectHolder = currentStep?.assigned_user_id === profile.id;
+
+  // Delegation (PRD §19): the current holder's active delegate may also act.
+  // Only queried when there's an actual current step and the caller isn't
+  // already the direct holder — no need to check delegation for a memo with
+  // no one currently holding it, or when the caller already qualifies.
+  let delegatingHolderName: string | null = null;
+  if (currentStep && !isDirectHolder) {
+    const { data: activeDelegation, error: delegationError } = await supabase
+      .from("delegations")
+      .select("id, delegating_user_id, delegator:profiles!delegations_delegating_user_id_fkey(name)")
+      .eq("delegating_user_id", currentStep.assigned_user_id)
+      .eq("delegate_user_id", profile.id)
+      .eq("status", "active")
+      .lte("start_date", new Date().toISOString().slice(0, 10))
+      .gte("end_date", new Date().toISOString().slice(0, 10))
+      .maybeSingle();
+    logQueryError("memo-detail.activeDelegation", delegationError);
+    if (activeDelegation) {
+      delegatingHolderName = (activeDelegation.delegator as unknown as { name: string } | null)?.name ?? "the current holder";
+    }
+  }
+  const isCurrentHolder = isDirectHolder || delegatingHolderName !== null;
+
   const hasBeenSubmitted = (steps ?? []).length > 0;
   const otherMembers = members ?? []; // any active org member is eligible, including self
 
@@ -96,26 +139,33 @@ export default async function MemoDetailPage({ params }: { params: Promise<{ id:
     // same text under both entries would just duplicate it in the UI.
     ...(steps ?? [])
       .filter((s) => s.acted_at)
-      .map((s) => ({
-        kind: "step" as const,
-        at: s.acted_at as string,
-        actorName: (s.profiles as unknown as { name: string } | null)?.name ?? "—",
-        label:
-          s.action_taken === "approve"
-            ? "Approved"
-            : s.action_taken === "reject"
-              ? "Rejected"
-              : s.action_taken === "request_changes"
-                ? "Requested changes"
-                : s.action_taken === "decline"
-                  ? "Declined & rerouted"
-                  : (s.action_taken ?? "Acted"),
-        body: null,
-      })),
+      .map((s) => {
+        const holderName = (s.profiles as unknown as { name: string } | null)?.name ?? "—";
+        const actedByName = (s.acted_by_profile as unknown as { name: string } | null)?.name ?? null;
+        const delegated = actedByName && actedByName !== holderName;
+        return {
+          kind: "step" as const,
+          at: s.acted_at as string,
+          actorName: delegated ? actedByName! : holderName,
+          onBehalfOfName: delegated ? holderName : null,
+          label:
+            s.action_taken === "approve"
+              ? "Approved"
+              : s.action_taken === "reject"
+                ? "Rejected"
+                : s.action_taken === "request_changes"
+                  ? "Requested changes"
+                  : s.action_taken === "decline"
+                    ? "Declined & rerouted"
+                    : (s.action_taken ?? "Acted"),
+          body: null,
+        };
+      }),
     ...(comments ?? []).map((c) => ({
       kind: "comment" as const,
       at: c.created_at,
       actorName: (c.profiles as unknown as { name: string } | null)?.name ?? "—",
+      onBehalfOfName: (c.on_behalf_of as unknown as { name: string } | null)?.name ?? null,
       label:
         c.comment_type === "general"
           ? "Comment"
@@ -183,10 +233,22 @@ export default async function MemoDetailPage({ params }: { params: Promise<{ id:
       </section>
 
       {isDraftEditable && !hasBeenSubmitted && (
-        <SubmitPanel memoId={memo.id} members={otherMembers} />
+        <SubmitPanel
+          memoId={memo.id}
+          members={otherMembers}
+          templates={(templates ?? []).map((t) => ({
+            id: t.id,
+            name: t.name,
+            positions: (t.workflow_template_positions as unknown as { id: string; position_order: number; position_label: string }[])
+              .slice()
+              .sort((a, b) => a.position_order - b.position_order),
+          }))}
+        />
       )}
 
-      {isCurrentHolder && <ActionPanel memoId={memo.id} members={otherMembers} />}
+      {isCurrentHolder && (
+        <ActionPanel memoId={memo.id} members={otherMembers} actingOnBehalfOf={delegatingHolderName} />
+      )}
 
       {hasBeenSubmitted && (
         <section className="mt-10">
@@ -213,6 +275,23 @@ export default async function MemoDetailPage({ params }: { params: Promise<{ id:
         </section>
       )}
 
+      {(versions ?? []).length > 0 && (
+        <section className="mt-10">
+          <h2 className="mb-3 text-xs font-medium uppercase tracking-wide text-neutral-500">
+            Version History
+          </h2>
+          <VersionHistory
+            versions={(versions ?? []).map((v) => ({
+              id: v.id,
+              versionNumber: v.version_number,
+              editorName: (v.profiles as unknown as { name: string } | null)?.name ?? "—",
+              submittedAt: v.associated_submission_at,
+              snapshot: v.content_snapshot as { subject: string; body: Record<string, unknown> },
+            }))}
+          />
+        </section>
+      )}
+
       <section className="mt-10">
         <h2 className="mb-3 text-xs font-medium uppercase tracking-wide text-neutral-500">
           Timeline
@@ -222,6 +301,9 @@ export default async function MemoDetailPage({ params }: { params: Promise<{ id:
             <li key={i} className="border-l-2 border-black pl-3">
               <p className="text-xs uppercase tracking-wide text-neutral-500">
                 {t.actorName} · {t.label} · {new Date(t.at).toLocaleString()}
+                {t.onBehalfOfName && (
+                  <span className="normal-case"> (on behalf of {t.onBehalfOfName})</span>
+                )}
               </p>
               {t.body && <p className="mt-1">{t.body}</p>}
             </li>

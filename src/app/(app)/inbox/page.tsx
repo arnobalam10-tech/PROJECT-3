@@ -32,12 +32,36 @@ export default async function InboxPage({
     .order("name");
   logQueryError("inbox.departments", departmentsError);
 
+  // PRD §19: an active delegate sees what's delegated to them in their own
+  // inbox too, not just the direct holder. today's date is compared against
+  // start_date/end_date directly (not the stored status label) — same
+  // enforcement logic as private.assert_current_holder() in the DB, so a
+  // delegation that's simply run past its end_date drops out of the inbox
+  // immediately without needing anything to flip its status first.
+  const today = new Date().toISOString().slice(0, 10);
+  const { data: activeDelegations, error: delegationsError } = await supabase
+    .from("delegations")
+    .select("delegating_user_id, delegator:profiles!delegations_delegating_user_id_fkey(name)")
+    .eq("delegate_user_id", profile.id)
+    .eq("status", "active")
+    .lte("start_date", today)
+    .gte("end_date", today);
+  logQueryError("inbox.activeDelegations", delegationsError);
+
+  const delegatorNameById = new Map<string, string>(
+    (activeDelegations ?? []).map((d) => [
+      d.delegating_user_id,
+      (d.delegator as unknown as { name: string } | null)?.name ?? "—",
+    ]),
+  );
+  const holderIds = [profile.id, ...delegatorNameById.keys()];
+
   let query = supabase
     .from("workflow_steps")
     .select(
-      "id, updated_at, memos!inner(id, memo_number, subject, priority, status, submitted_at, department_id, author_id, profiles!memos_author_id_fkey(name), departments(name))",
+      "id, updated_at, assigned_user_id, memos!inner(id, memo_number, subject, priority, status, submitted_at, department_id, author_id, profiles!memos_author_id_fkey(name), departments(name))",
     )
-    .eq("assigned_user_id", profile.id)
+    .in("assigned_user_id", holderIds)
     .eq("status", "current");
 
   if (params.priority) {
@@ -53,6 +77,7 @@ export default async function InboxPage({
   type Row = {
     id: string;
     updated_at: string;
+    assigned_user_id: string;
     memos: {
       id: string;
       memo_number: string;
@@ -141,6 +166,11 @@ export default async function InboxPage({
                 <Link href={`/memos/${row.memos.id}`} className="font-medium underline">
                   {row.memos.subject}
                 </Link>
+                {row.assigned_user_id !== profile.id && (
+                  <span className="ml-2 text-xs text-neutral-500">
+                    (as delegate for {delegatorNameById.get(row.assigned_user_id) ?? "—"})
+                  </span>
+                )}
               </td>
               <td className="py-3">{row.memos.profiles?.name ?? "—"}</td>
               <td className="py-3">{row.memos.departments?.name ?? "—"}</td>

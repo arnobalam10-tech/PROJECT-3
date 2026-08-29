@@ -4,17 +4,15 @@
 rules. It is the source of truth for "what's the current state of the project" — more reliable
 than memory of prior sessions. Be precise and honest; "mostly done" is not an acceptable status.
 
-Last updated: 2026-08-29 (Phase 2 checks + Phase 3 build session)
+Last updated: 2026-08-29 (Phase 8 session)
 Updated by: Claude Code
 
 ---
 
 ## Current Phase
 
-Phase 7 (Search, dashboard, reporting — PRD §14/§15/§22) — done. Since then: a requested audit
-for the same silent-error-swallowing failure shape across every other list/dashboard page, which
-found the gap was **not isolated** — fixed consistently everywhere, see "Post-Phase-7 audit"
-below. Moving into Phase 8 next.
+Phase 8 (Templates, delegation, versioning, audit log — PRD §18/§19/§20/§21) — done. Moving into
+Phase 9 (PDF export) next.
 
 ## Done ✅
 
@@ -479,6 +477,192 @@ entries fired during normal use (i.e., this audit didn't uncover a *second* live
 behind the same pattern — the search jsonb/ilike issue was the only query that was actually
 broken; every other query site was healthy, just unguarded against a *future* failure).
 
+**Worth pulling into the final project documentation's vibe-coding section (PRD §28.B / this
+project's "how were errors identified and corrected" writeup):** this audit is a good concrete
+example of an isolated bug (search's jsonb/ilike error) turning into a full systemic sweep and
+fix across the codebase, rather than a one-line patch. See also the Phase 8 section below for a
+second, more pointed example — a regression *introduced and caught within the same session*.
+
+**Correction, found mid-Phase-8 while touching the nav shell for unrelated reasons:** the audit
+above missed two call sites that share the exact same shape — `src/app/(app)/layout.tsx`'s
+unread-notification-count badge query, and `src/lib/notifications.ts`'s
+`sendEmailsForNewNotifications` read of newly-created `notifications` rows. Both destructured
+`data`/`count` without `error`, meaning a failure there would have shown "no unread" or silently
+sent zero emails — indistinguishable from the honest zero case, the identical failure shape the
+audit above was supposed to have found everywhere. Fixed the same way (`logQueryError`) as part
+of Phase 8's own work rather than treating the earlier audit as closed and separate. The prior
+audit's claim of being exhaustive was **not fully accurate** — 13 files/~32 sites in total, not
+11/~30 — corrected here rather than left standing.
+
+## Phase 8 — Templates, delegation, versioning, audit log (PRD §18/§19/§20/§21).
+
+**Schema — migrations 021–026** (full detail in `DATABASE.md`'s migrations log):
+- `workflow_templates` + `workflow_template_positions` (§18) — plain RLS-gated CRUD (org_admin
+  writes, any org member reads), unlike the workflow engine tables — there's no derived-state
+  logic to centralize here, just ownership + org scoping, same class as `departments`.
+- `delegations` (§19) + `create_delegation()`/`revoke_delegation()` SECURITY DEFINER functions.
+  SELECT-only RLS (delegator, delegate, or org admin); every write goes through the two functions
+  so same-org/active-target/not-self/date-range validation and "only the delegator may revoke
+  their own delegation" live in exactly one place, not duplicated between RLS and app code.
+- Resolved the `TODO(Phase 8)` left in `private.assert_current_holder()` since Phase 4: it now
+  also accepts an active delegate, checked by **date range directly against `delegations.start_date`/
+  `end_date`, not the stored `status` column** — a delegation past its `end_date` is unusable the
+  instant that happens, without needing a scheduled job to flip a status label first. Added
+  `workflow_steps.acted_by` and `comments`/`audit_log`.`on_behalf_of_user_id` so an action taken
+  by a delegate is recorded as **both** who actually acted and who they acted for — never
+  collapsed into just one, per §19's explicit requirement.
+- `memos.workflow_template_id` — **a second "documented since Phase 1 but never actually
+  migrated" gap**, same class as the `memo_versions` miss caught in Phase 4. Caught this time by
+  checking `information_schema.columns` directly rather than trusting `DATABASE.md`, before
+  wiring `workflow_templates` into `submit_memo`. Fixed in migration 024.
+
+**A regression introduced and caught within this same session — documented in full rather than
+quietly folded away, since the transcript is graded on process:**
+
+Migration 023 rewrote `workflow_approve`/`workflow_decline_reroute` to add delegate attribution,
+but was written from the *remembered* migration-013 function bodies instead of their actual
+*live* versions — silently undoing migration 019's Phase 6 bug fix (every participant added
+mid-chain gets a `workflow_assignment` notification, not just the ones added at initial
+submission). This wasn't caught by build/lint (both stayed clean — the code was syntactically and
+type-correct, just behaviorally incomplete) or by the delegation test script's early passes,
+since that failure mode only shows up as a *missing* notification, not an error.
+
+**Caught by discipline, not luck**: before writing migration 024 (adding `p_workflow_template_id`
+to `submit_memo`), the live function body was pulled via
+`pg_get_functiondef('public.submit_memo(...)'::regprocedure)` to diff against rather than trusted
+from memory — a habit picked up specifically *because* of the regression above, which was itself
+caught the same way one function later: after applying migration 024, re-querying
+`pg_get_functiondef()` for `workflow_approve`/`workflow_decline_reroute` showed the
+`workflow_assignment` calls were missing. Fixed in migration 025, restoring exactly those
+`notify_user` calls on top of the new `acted_by`/`on_behalf_of_user_id` attribution — both are
+kept, neither regresses the other.
+
+**A second, related self-caught bug**: migration 024's `CREATE OR REPLACE function submit_memo(...)`
+added a third parameter, which in Postgres creates a *new overloaded function* rather than
+replacing the original — it does not remove `submit_memo(uuid, uuid[])`. This is the exact
+overload trap already flagged and deliberately avoided for `private.log_audit_event()` earlier in
+migration 023 (handled there by `DROP FUNCTION` + recreate) — missed here by not applying the
+same discipline consistently. A 2-arg client call would have silently resolved to the *stale*
+old-body overload. Caught by querying `pg_proc`/`regprocedure` for `submit_memo` and finding two
+rows instead of one. Fixed in migration 026 (drop the stale overload, re-grant `EXECUTE` on the
+survivor). A full sweep afterward (`select proname, count(*) from pg_proc ... group by proname`
+across every function touched this session) confirmed exactly one version of each.
+
+**UI built**:
+- `/admin/templates` — org_admin CRUD (name, description, ordered position labels; delete with
+  in-app two-step confirm, no native `confirm()`, consistent with the standing decision from
+  Phase 3).
+- `/delegations` — self-service: create a delegation (delegate, date range, optional reason),
+  see delegations given and received, revoke (two-step confirm) a delegation you created.
+  Effective status (`active`/`expired`/`revoked`) is **computed at read time** from `end_date`,
+  not trusted from the stored column — see the schema note above.
+- `/admin/audit-log` — admin-only viewer, filterable by event type/user/date range, capped at 200
+  rows with an explicit "narrow the filters to see more" note rather than a silent truncation.
+- Memo submit panel (`submit-panel.tsx`): optional "start from a template" picker — choosing a
+  template shows its ordered positions, each with a person-assignment dropdown; applying it
+  replaces the chain being built. Any manual add/remove afterward clears the "built from this
+  template" tag so `memos.workflow_template_id` only gets set when the submitted chain still
+  genuinely matches what the template produced.
+- Memo detail page: a "Version History" section (RLS already permitted this from Phase 4's
+  `memo_versions` policy — only the UI was missing) listing every version with a per-row
+  expand/collapse showing that version's subject + body snapshot. The action panel now shows an
+  explicit "You are acting as an active delegate for X" banner whenever the caller qualifies via
+  delegation rather than being the direct holder; the timeline shows step/comment entries as
+  "acted by [delegate] · [action] (on behalf of [holder])" whenever those differ, never silently
+  attributing to just one.
+- Inbox widened to also show memos delegated to the caller (in addition to their own), each row
+  marked "(as delegate for X)" — otherwise a delegate would have no way to discover what's
+  delegated to them without knowing the memo id in advance.
+
+**Rigor requested by the user, all three addressed with script/query-based proof, not just a UI
+walkthrough** (ephemeral Node script, real signed-in HTTP sessions — a fresh throwaway org + 4
+real users created via the same bcrypt/`pgcrypto` + `auth.identities` pattern documented since
+Phase 4 — all test data and the script deleted immediately after each run):
+
+**1. Delegation — 39/39 checks passed** (first pass surfaced 5 failures that were **test-isolation
+bugs, not app bugs** — see below):
+- No delegation exists → delegate denied acting on the holder's memo.
+- Active delegation created → delegate **can** act; verified directly against the DB (not
+  inferred): `workflow_steps.assigned_user_id` stays the holder (their position in the chain is
+  unchanged) while `acted_by` is the delegate; the resulting `comments` row has `author_id` =
+  delegate and `on_behalf_of_user_id` = holder; the resulting `audit_log` rows have `user_id` =
+  delegate and `on_behalf_of_user_id` = holder. Both people, never just one.
+- Revoked delegation → delegate denied; confirmed the denied attempt left `workflow_steps`
+  byte-identical (still `current`, `acted_by` still null) — zero side effects, not just a rejected
+  API call.
+- A delegation that hasn't started yet (`start_date` tomorrow) → delegate denied.
+- A delegation whose `end_date` has already passed, **with its `status` column still reading
+  `active`** (seeded directly to isolate this from `create_delegation`'s own creation-time
+  validation, which refuses to create an already-expired one) → delegate still denied, proving
+  enforcement checks the actual date range and doesn't trust the stored label.
+- A non-delegator (uninvolved third party) cannot revoke someone else's delegation.
+- **First run's failures, fully explained and re-verified clean, not just dismissed**: three
+  "should be denied" checks unexpectedly passed on the first run. Root cause: an earlier active
+  delegation between the same holder/delegate pair (created for a different check) was never
+  revoked before later checks ran, and — correctly — any one valid delegation is sufficient
+  authorization regardless of others, so it silently kept authorizing every later attempt too.
+  This was a test-isolation bug (overlapping delegations between the same pair, no cleanup
+  between sections), not an authorization bug — confirmed by querying the `delegations` table
+  directly and seeing the un-revoked row, then fixing the test's isolation and re-running for a
+  clean 39/39. Also confirms this session did not just declare success on faith — a real
+  discrepancy was investigated to its actual root cause before being written off.
+- End-to-end UI confirmation on top of the script proof (not required by the user, done anyway
+  since it's the same rigor standard as prior phases): signed in as the delegate in a real
+  browser, saw the "acting as an active delegate for X" banner, approved, and the timeline
+  rendered "UI Test Admin · Approved · (on behalf of UI Test User Two)" exactly as designed —
+  and confirmed the banner correctly disappeared on Admin's *next* turn, once Admin became the
+  *direct* holder rather than a delegate.
+
+**2. Versioning — resubmission creates a new row; a prior version is genuinely viewable by an
+authorized participant, not just present in the DB**:
+- After `request_changes` → author edits → `resubmit_memo`: exactly 2 `memo_versions` rows exist
+  (not 1 overwritten), with version 1 holding the original subject and version 2 the revised one.
+- **The specific thing the user asked to confirm**: an authorized participant (a workflow
+  participant, not the author) reading version 1 — the *non-latest* one — through the normal
+  RLS-gated client succeeded and returned the original content, proving it's actually viewable by
+  someone with legitimate reason to see it, not merely that the row exists via a service-role
+  query.
+- A zero-involvement outsider in the same org querying the same version got 0 rows (RLS-filtered,
+  not an error) — versions inherit the memo's own visibility boundary, not org-wide readability.
+- Exercised the resubmission routing model for real in the process: since the memo's only
+  original participant had already resolved to `changes_requested` (terminal, not `queued`),
+  resubmission does **not** automatically return to them — confirmed the transient
+  author-as-holder had to explicitly forward back via `p_forward_to_user_id`, matching §7.1's "no
+  special resume logic" exactly as documented, not just as claimed.
+
+**3. Audit log — write-only from the app's perspective, confirmed for org_admin specifically
+(the highest-privilege role short of service-role) and for a regular user**:
+- org_admin's `UPDATE`/`DELETE` attempts against a real `audit_log` row both matched **zero
+  rows** (no policy exists for either operation at all, so PostgREST/RLS silently filters to
+  nothing rather than raising — checked the actual row count returned, not just the absence of an
+  error, since a no-op success and a real denial can look identical from the error field alone).
+  Verified the row's `description` was byte-identical afterward via a direct service-role read.
+- A regular user's `UPDATE` attempt also matched zero rows, for completeness.
+
+**Decisions made this phase, logged per `CLAUDE.md` §7:**
+- **Delegation is scoped to `assert_current_holder`-gated actions only** (approve/decline/reject/
+  request-changes) — `submit_memo`/`resubmit_memo` stay author-only, not delegate-aware. §19
+  frames delegation as "act on their behalf" generically, but §7.1's "current holder" is the
+  concrete gate the codebase already enforces everywhere else; extending delegation to
+  author-only actions (submitting a brand-new draft, resubmitting one's own memo) wasn't asked
+  for and would need its own authorization story (can a delegate submit memos as if they were the
+  delegator, under the delegator's name?) that §19 doesn't specify. Left out rather than guessed.
+- **`delegations.status` only ever transitions `active -> revoked`; `'expired'` is never written**
+  by any function, though it stays in the enum for documentation. Enforcement checks the actual
+  `start_date`/`end_date` range directly, so nothing is gained by a scheduled job flipping a
+  status label — the app computes an "expired" *display* label at read time instead. Chosen to
+  avoid introducing `pg_cron` or any scheduled task for something the date-range check already
+  handles correctly without one.
+- **Only the delegator may revoke their own delegation** — not an org_admin override. §19 doesn't
+  mention admin revocation, and it wasn't asked for; admins get read visibility into all of an
+  org's delegations (for oversight) but not a revoke button. If this needs to change later
+  (e.g. someone leaves the org and their delegations should be forcibly cut), treat it as a scope
+  question to confirm, not an implementation detail to just add.
+- **Workflow templates are plain RLS-gated CRUD**, not routed through SECURITY DEFINER functions
+  like the workflow engine tables — there's no derived/authorization-sensitive state here (unlike
+  "who currently holds this memo"), just ownership and org scoping, so the extra indirection
+  wasn't warranted.
+
 ## In Progress 🚧
 
 - **Verify domain at resend.com/domains and update `RESEND_FROM_EMAIL`** before the demo/grading
@@ -578,7 +762,8 @@ deleted immediately after the run; both test scripts were deleted, not committed
 - [x] ~~Phase 7 — Search, dashboard, reporting~~ **Done** — see Phase 7 section above. (regular-user search/visibility scope per PRD §2.5
       item 7 / §14 — narrower than org-wide, ties into the same `workflow_steps`-based visibility
       widening as Phase 4)
-- [ ] Phase 8 — Templates, delegation, versioning, audit log
+- [x] ~~Phase 8 — Templates, delegation, versioning, audit log~~ **Done** — see Phase 8 section
+      above, including a self-caught-and-fixed regression documented in full.
 - [ ] Phase 9 — PDF export
 - [ ] Phase 10 — Design pass (Swiss system applied consistently, **including the landing page
       rebuild flagged above**)
@@ -677,8 +862,7 @@ if needed. New entries below.)*
 - GitHub: https://github.com/arnobalam10-tech/PROJECT-3 (private).
 - `SUPABASE_SERVICE_ROLE_KEY`: set by the user in `.env.local` and Vercel (confirmed by the user
   directly, never seen in chat). Not yet re-tested against the invite-user flow.
-- Resend: still not configured.
-- Last migration applied: `20260829074500_020_memo_body_text_search`.
+- Last migration applied: `20260829084000_026_drop_stale_submit_memo_overload`.
 - `SUPABASE_SERVICE_ROLE_KEY`: confirmed present in `.env.local` (independently re-verified, not
   taken on trust — see Phase 6). Not yet re-tested against invite-user specifically.
 - `RESEND_API_KEY`/`RESEND_FROM_EMAIL`: confirmed present and working — real delivery verified
@@ -693,6 +877,12 @@ if needed. New entries below.)*
   `assert_current_holder()`, `log_audit_event()`, `notify_user()`. New client-callable RPCs:
   `submit_memo`, `workflow_approve`, `workflow_decline_reroute`, `workflow_reject`,
   `workflow_request_changes`, `resubmit_memo`.
+- **New this Phase 8 session**: tables `workflow_templates`, `workflow_template_positions`,
+  `delegations`. New columns: `memos.workflow_template_id`, `workflow_steps.acted_by`,
+  `comments.on_behalf_of_user_id`, `audit_log.on_behalf_of_user_id`. New client-callable RPCs:
+  `create_delegation`, `revoke_delegation`. `submit_memo` gained a 3rd optional parameter
+  (`p_workflow_template_id`) — same RPC name, new signature, the old 2-arg overload was
+  deliberately dropped (migration 026) rather than left to drift alongside the new one.
 
 ## Demo / Seed Data Notes
 

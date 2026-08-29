@@ -83,8 +83,11 @@ html or jsonb), body_text (plain-text mirror of body's content, trigger-maintain
 migration 020, exists purely so search can `ilike` it; `body` itself has no ilike operator since
 it's jsonb), author_id, department_id, category_id, priority (normal|high|urgent),
 status (draft|submitted|pending_review|pending_approval|changes_requested|rejected|approved|
-cancelled), workflow_template_id (nullable, if built from a template), created_at, updated_at,
-submitted_at, completed_at`
+cancelled), workflow_template_id (nullable, if built from a template — **had been documented
+here since Phase 1 but, like `memo_versions` in migration 017, was never actually created until
+migration 024 in Phase 8**; caught by checking `information_schema.columns` directly rather than
+trusting this doc, same lesson as the `memo_versions` gap), created_at, updated_at, submitted_at,
+completed_at`
 — note there is deliberately no fixed `current_step_position` integer: "who currently holds
 this memo" is derived by querying `workflow_steps` for the row with `status = current` (there
 should be exactly one at a time while the memo is in flight), since the chain itself is mutable
@@ -103,7 +106,9 @@ can edit.)
 changes_requested|declined|skipped), action_taken (approve|reject|comment|request_changes|
 forward|decline, nullable until acted on), comment, is_original (bool — was this participant
 part of the chain as it stood at submission, or inserted later), added_by (nullable — who
-inserted this participant if not original), acted_at, created_at, updated_at`
+inserted this participant if not original), acted_by (nullable, added migration 023 — who
+actually performed the action: equals `assigned_user_id` for a direct actor, or the delegate's
+id when acted via an active `delegations` row, per PRD §19), acted_at, created_at, updated_at`
 
 Behavior:
 - On submission, rows are created for the initial suggested chain with `status = queued`
@@ -138,7 +143,8 @@ Behavior:
 
 **comments**
 `id, memo_id, author_id, body, comment_type (general|approval|rejection|change_request),
-created_at`
+on_behalf_of_user_id (nullable, added migration 023 — set when `author_id` acted as an active
+delegate for someone else, per PRD §19), created_at`
 — immutable to ordinary users after creation (no update/delete policy for `regular_user` role).
 
 **attachments**
@@ -147,9 +153,19 @@ mime_type, uploaded_by, uploaded_at`
 — never expose `storage_path` directly to the client as a public URL; always mint a
 short-lived signed URL server-side after an authorization check.
 
-**delegations** (tenant-scoped)
+**delegations** (tenant-scoped) — built migration 022
 `id, organization_id, delegating_user_id, delegate_user_id, start_date, end_date, reason,
-status (active|expired|revoked), created_at`
+status (active|expired|revoked — but see note), created_at`
+— no client INSERT/UPDATE/DELETE policy at all; only `create_delegation()`/`revoke_delegation()`
+(SECURITY DEFINER) may write, so same-org/active-target/not-self/date-range validation and
+"only the delegator may revoke their own delegation" live in exactly one place. **`'expired'` is
+never actually written** by either function — enforcement
+(`private.assert_current_holder()`, migration 023) checks `current_date between start_date and
+end_date` directly against the stored dates, not the status label, so an old delegation is
+correctly unusable the instant its `end_date` passes without needing a scheduled job to flip a
+status column first; the status column only ever transitions `active -> revoked`. The app
+computes an "expired" *display* label at read time from `end_date < current_date` instead. See
+`STATUS.md`'s Phase 8 decisions for the full rationale.
 
 **notifications** (tenant-scoped, per-user)
 `id, organization_id, user_id, type (enum matching PRD §13 triggers), memo_id (nullable),
@@ -158,7 +174,8 @@ message, is_read, created_at`
 **audit_log** (tenant-scoped, append-only — no update/delete policy at all, even for admins,
 via the API; only a service-role backend process may write)
 `id, organization_id, event_type, user_id, related_entity_type, related_entity_id,
-description, created_at`
+description, on_behalf_of_user_id (nullable, added migration 023 — mirrors `comments`' column,
+set when `user_id` acted as an active delegate for someone else), created_at`
 
 ## Migrations applied so far
 
@@ -277,6 +294,65 @@ project). As of this note:
     '$.**.text')`), kept in sync by a `BEFORE INSERT OR UPDATE OF body` trigger — same pattern as
     migration 018's last-activity triggers. Search now filters `body_text`, and the search page
     now logs (rather than silently swallows) any future query error.
+20. `20260829080000_021_workflow_templates` — `workflow_templates` + `workflow_template_positions`
+    (PRD §18). Simple admin-managed CRUD (org_admin writes, any org member reads to pick one at
+    submission) using plain RLS-gated table access, unlike `workflow_steps` — there's no
+    server-side derived-state logic here to centralize, just ownership + org scoping, the same
+    class of table as `departments`/`memo_categories`.
+21. `20260829080500_022_delegations` — `delegations` (PRD §19) + `create_delegation()`/
+    `revoke_delegation()` SECURITY DEFINER functions. SELECT-only RLS (visible to the delegator,
+    the delegate, and org admins); all writes route through the two functions so the validation
+    (same-org, active target, not self-delegating, sane date range, only the delegator may revoke
+    their own delegation) is enforced in exactly one place. Not yet wired into the workflow action
+    functions — that's migration 023, applied immediately after in the same session.
+22. `20260829081500_023_delegation_aware_actions` — resolves the `TODO(Phase 8)` left in migration
+    013's `private.assert_current_holder()`. Adds `workflow_steps.acted_by` and
+    `comments`/`audit_log`.`on_behalf_of_user_id` (see schema above) so PRD §19's "acted by
+    [delegate] on behalf of [delegating user], never silently attributed to just one of them" is
+    representable. `assert_current_holder()` now also accepts an active delegate (checked by date
+    range against `delegations`, not the stored status label — see the `delegations` schema note
+    above); the four holder-gated action functions (`workflow_approve`,
+    `workflow_decline_reroute`, `workflow_reject`, `workflow_request_changes`) each compute
+    whether the actual caller differs from the position's `assigned_user_id` and, if so, stamp
+    `acted_by`/`on_behalf_of_user_id` on every row that action writes. `private.log_audit_event()`
+    gained an optional 7th `p_on_behalf_of_user_id` parameter (dropped and recreated, not
+    `CREATE OR REPLACE`d with a different signature, so there's exactly one version rather than an
+    accidental overload) rather than a follow-up `UPDATE` to backfill the value — the caller
+    already knows it at insert time, no need to look the row back up by a
+    (org, event_type, entity, user, most-recent) match. `submit_memo`/`resubmit_memo` are
+    deliberately **not** delegate-aware — see `STATUS.md`'s Phase 8 decisions for why author-level
+    actions are out of this scope.
+23. `20260829083000_024_memos_workflow_template_id` — **bug fix**, same class as migration 017:
+    `memos.workflow_template_id` was documented in this file since Phase 1 but never actually
+    created. Caught by checking `information_schema.columns` directly while wiring
+    `workflow_templates` into `submit_memo` (adds an optional 3rd `p_workflow_template_id`
+    parameter). Written as a precise diff against the **live** `pg_get_functiondef()` output for
+    `submit_memo`, not reconstructed from memory — see migration 025's note for why that mattered.
+24. `20260829083500_025_fix_workflow_assignment_regression` — **self-caught regression**, found
+    and fixed in the same session that introduced it. Migration 023 rewrote
+    `workflow_approve`/`workflow_decline_reroute` starting from the *original* migration-013
+    function bodies (recalled from context) rather than their actual *live* versions, silently
+    undoing migration 019's `workflow_assignment` notification fix for a participant added
+    mid-chain. Caught immediately after applying migration 024, by querying
+    `pg_get_functiondef()` for the live functions instead of assuming the just-applied SQL was
+    correct — the diff didn't match what migration 019 was known to have added. Fixed by
+    restoring exactly those `notify_user` calls on top of migration 023's `acted_by`/
+    `on_behalf_of_user_id` attribution (both are kept, neither regresses the other). Documented
+    here in full rather than quietly folded into 023, since a mis-remembered baseline causing a
+    regression — and the process of catching it by re-querying live state instead of trusting
+    memory — is exactly the kind of thing worth showing plainly in the build history.
+25. `20260829084000_026_drop_stale_submit_memo_overload` — **self-caught, same session**: adding
+    a 3rd parameter to `submit_memo` via `CREATE OR REPLACE` in migration 024 created a *second*
+    overloaded function rather than replacing the original 2-arg one (Postgres treats a different
+    argument list as a different function identity) — the exact overload trap this session had
+    already flagged and deliberately avoided for `private.log_audit_event()` in migration 023,
+    missed here by not applying the same discipline. A 2-arg client call would have silently
+    resolved to the stale old-body overload. Caught by querying `pg_proc`/`regprocedure` for
+    `submit_memo` and finding two rows instead of one. Fixed by dropping the stale 2-arg overload
+    and re-applying its EXECUTE grant to the surviving 3-arg version. A full sweep of every
+    function touched this session (`select proname, count(*) ... group by proname`) confirmed
+    exactly one version of each afterward — see `STATUS.md`'s Phase 8 section for the query and
+    result.
 
 ## Notes for Claude Code
 

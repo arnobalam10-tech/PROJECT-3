@@ -6,7 +6,15 @@ import { approveMemo, declineMemo, rejectMemo, requestChangesMemo } from "./work
 type Member = { id: string; name: string };
 type Mode = "approve" | "decline" | "reject" | "changes" | null;
 
-export function ActionPanel({ memoId, members }: { memoId: string; members: Member[] }) {
+export function ActionPanel({
+  memoId,
+  members,
+  actingOnBehalfOf,
+}: {
+  memoId: string;
+  members: Member[];
+  actingOnBehalfOf?: string | null;
+}) {
   const [mode, setMode] = useState<Mode>(null);
 
   return (
@@ -14,6 +22,12 @@ export function ActionPanel({ memoId, members }: { memoId: string; members: Memb
       <h2 className="mb-3 text-xs font-medium uppercase tracking-wide text-neutral-500">
         This memo requires your action
       </h2>
+      {actingOnBehalfOf && (
+        <p className="mb-3 border border-black bg-neutral-100 px-3 py-2 text-sm">
+          You are acting as an active delegate for <strong>{actingOnBehalfOf}</strong>. This
+          action will be recorded as taken by you on their behalf.
+        </p>
+      )}
 
       {mode === null && (
         <div className="flex flex-wrap gap-2">

@@ -13,6 +13,7 @@ const TYPE_LABELS: Record<string, string> = {
   comment_added: "Comment",
   memo_resubmitted: "Resubmitted",
   workflow_completed: "Workflow completed",
+  delegation_assigned: "Delegation assigned",
 };
 
 export default async function NotificationsPage() {

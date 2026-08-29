@@ -25,6 +25,7 @@ export async function submitMemo(
   await requireProfile();
   const memoId = String(formData.get("memo_id"));
   const participantIds = formData.getAll("participant_id").map(String).filter(Boolean);
+  const workflowTemplateId = String(formData.get("workflow_template_id") ?? "").trim() || null;
 
   if (participantIds.length === 0) {
     return { error: "Add at least one participant before submitting." };
@@ -35,6 +36,7 @@ export async function submitMemo(
   const { error } = await supabase.rpc("submit_memo", {
     p_memo_id: memoId,
     p_participant_ids: participantIds,
+    p_workflow_template_id: workflowTemplateId,
   });
 
   if (error) return { error: error.message };

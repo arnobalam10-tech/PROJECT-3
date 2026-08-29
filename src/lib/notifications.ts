@@ -1,6 +1,7 @@
 import "server-only";
 import { Resend } from "resend";
 import { createAdminClient } from "./supabase/admin";
+import { logQueryError } from "./log-query-error";
 
 const TYPE_SUBJECTS: Record<string, string> = {
   memo_requires_action: "Action required",
@@ -10,6 +11,7 @@ const TYPE_SUBJECTS: Record<string, string> = {
   comment_added: "New comment",
   memo_resubmitted: "Memo resubmitted",
   workflow_completed: "Workflow completed",
+  delegation_assigned: "Delegation assigned to you",
 };
 
 export type EmailDispatchResult =
@@ -45,11 +47,12 @@ export async function sendEmailsForNewNotifications(
     return { sent: 0, total: 0, skipped: "service_role_not_configured" };
   }
 
-  const { data: rows } = await admin
+  const { data: rows, error: rowsError } = await admin
     .from("notifications")
     .select("id, type, message, memo_id, profiles!notifications_user_id_fkey(email, name)")
     .eq("memo_id", memoId)
     .gte("created_at", sinceIso);
+  logQueryError("notifications.sendEmailsForNewNotifications", rowsError);
 
   if (!rows?.length) {
     return { sent: 0, total: 0, ids: [] };
