@@ -13,7 +13,7 @@ const TYPE_SUBJECTS: Record<string, string> = {
 };
 
 export type EmailDispatchResult =
-  | { sent: number; total: number; skipped?: undefined }
+  | { sent: number; total: number; ids: string[]; skipped?: undefined }
   | { sent: 0; total: 0; skipped: "resend_not_configured" | "service_role_not_configured" };
 
 /**
@@ -52,25 +52,34 @@ export async function sendEmailsForNewNotifications(
     .gte("created_at", sinceIso);
 
   if (!rows?.length) {
-    return { sent: 0, total: 0 };
+    return { sent: 0, total: 0, ids: [] };
   }
 
   const resend = new Resend(apiKey);
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
   const outcomes = await Promise.allSettled(
-    rows.map((row) => {
+    rows.map(async (row) => {
       const recipient = row.profiles as unknown as { email: string; name: string } | null;
-      if (!recipient?.email) return Promise.resolve(null);
-      return resend.emails.send({
+      if (!recipient?.email) return null;
+      const result = await resend.emails.send({
         from: fromEmail,
         to: recipient.email,
         subject: `Relay — ${TYPE_SUBJECTS[row.type] ?? "Notification"}`,
         text: `Hi ${recipient.name ?? ""},\n\n${row.message}\n\nView it here: ${appUrl}/memos/${row.memo_id}`,
       });
+      if (result.error) {
+        console.error("[notifications] Resend send failed:", row.type, "->", recipient.email, result.error);
+        return null;
+      }
+      console.log("[notifications] Resend accepted email:", row.type, "->", recipient.email, "id:", result.data?.id);
+      return result.data?.id ?? null;
     }),
   );
 
-  const sent = outcomes.filter((o) => o.status === "fulfilled" && o.value !== null).length;
-  return { sent, total: rows.length };
+  const ids = outcomes
+    .filter((o) => o.status === "fulfilled" && o.value)
+    .map((o) => (o as PromiseFulfilledResult<string>).value);
+
+  return { sent: ids.length, total: rows.length, ids };
 }

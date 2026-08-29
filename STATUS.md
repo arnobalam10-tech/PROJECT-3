@@ -11,13 +11,9 @@ Updated by: Claude Code
 
 ## Current Phase
 
-Phase 6 (Notifications — in-app + Resend email, PRD §13) — built by consuming Phase 4's existing
-`audit_log`/`notifications` write-paths rather than duplicating them, per the user's explicit
-instruction to verify that's actually true rather than assume it. One real gap found and fixed
-in the process (see below). **Live email delivery is NOT yet verified** — no Resend account
-exists yet, and `SUPABASE_SERVICE_ROLE_KEY` is currently absent from `.env.local` (flagged to the
-user, unresolved as of this note) — this is stated plainly rather than treating "the code path
-runs without throwing" as proof of delivery.
+Phase 6 (Notifications — in-app + Resend email, PRD §13) is **fully done, including live email
+delivery, confirmed with real evidence** — not just a successful API response. See "Phase 6 —
+live delivery verification" below for the full trail. Moving into Phase 7 next.
 
 ## Done ✅
 
@@ -338,33 +334,65 @@ signed-in users (Dave = sole participant, Eve = same-org zero-involvement user),
   arrived at that id (typed URL, clicked a notification, doesn't matter).
 - All test users/data and the script deleted after.
 
-**2. Resend email — built correctly, but honestly NOT verified against a real inbox, and the
-distinction is documented explicitly rather than glossed over:**
-- No Resend account/API key exists yet (confirmed with the user rather than assumed — they don't
-  have one set up).
-- What **is** verified: submitted a real memo through the actual browser UI (not a script calling
-  the RPC directly) so the real `submitMemo` server action ran end-to-end, including the
-  `dispatchEmails` call into `sendEmailsForNewNotifications`. Checked the dev server logs
-  afterward — the action completed successfully (`submitMemo({"error":null}, {})`) with no
-  uncaught error, confirming the graceful-skip path (`resend_not_configured`) works correctly and
-  never breaks the primary workflow action, which is the one thing that *was* testable right now.
-- What is **not** verified and won't be claimed as done: that Resend's API actually accepts and
-  delivers a message, or that a real inbox receives content matching the triggering event. This
-  needs the user to provide `RESEND_API_KEY`/`RESEND_FROM_EMAIL` (added directly to `.env.local`,
-  not through chat) and a real recipient address before it can be checked for real.
+**2. Resend email — initially built correctly but unverified; now genuinely verified against real
+delivery, in a follow-up round after the user added real credentials:**
+- Re-checked `.env.local` directly (not trusting the user's word, per their own explicit
+  instruction) before proceeding — first re-check still showed `SUPABASE_SERVICE_ROLE_KEY`
+  absent and Resend keys blank; the user then confirmed they'd forgotten to actually save the
+  file. Re-checked again afterward: all three (`SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`,
+  `RESEND_FROM_EMAIL`) present with plausible lengths.
+- Restarted the dev server (env vars are read at process start), then triggered two separate
+  real notification-worthy actions through the actual browser UI (not a script calling the RPC
+  directly): submit → reject, and a fresh submit.
+- **First real attempt surfaced a genuine constraint, not a bug**: Resend rejected every send
+  with `403 validation_error` — *"You can only send testing emails to your own email address
+  (arnob.alam10@gmail.com). To send emails to other recipients, please verify a domain."* This
+  Resend account has no verified sending domain yet, so in its current sandbox mode it can only
+  deliver to the account owner's own registered address. Confirmed the app handled this
+  correctly regardless: the error was caught and logged (`[notifications] Resend send failed: ...`
+  with the full Resend error), the primary workflow action (reject, submit) completed
+  successfully both times, and nothing crashed — the same graceful-failure discipline as the
+  earlier "not configured" case, now proven against a *real* API rejection too.
+- To get a genuine delivered result without an account-level Resend change, temporarily pointed
+  one test participant's notification-recipient email (`profiles.email` only — never touched
+  their login credentials in `auth.users`) at the Resend account's own verified address, then
+  triggered a fresh submission naming them a participant.
+- **Queried the Resend API directly for the resulting message IDs** (`resend.emails.get(id)` —
+  the same underlying data the dashboard's activity log reads) rather than trusting the `200` from
+  the send call:
+  ```
+  id=134c3e86-... { subject: "Relay — Action required", last_event: "delivered", to: [...] }
+  id=8f900a13-... { subject: "Relay — You were added to a workflow", last_event: "delivered", to: [...] }
+  ```
+  Both show `last_event: "delivered"` — genuine confirmed delivery, not just acceptance — with
+  the recipient and subject line matching the triggering event type exactly
+  (`memo_requires_action` → "Action required", `workflow_assignment` → "You were added to a
+  workflow"), confirming content matches the event, not just that *an* email went out.
+- Reverted the temporary profile-email change and deleted all test data/scripts immediately after.
 
-**Also checked, per the user's request — could not fully resolve, flagged clearly:**
-- **`SUPABASE_SERVICE_ROLE_KEY` is confirmed absent from `.env.local`** (verified via a full hex
-  dump of the file, not just grep, after the user initially called this a false alarm — it
-  wasn't). RESEND_API_KEY/RESEND_FROM_EMAIL are present but empty. Asked the user to check their
-  own copy of the file and re-add if needed; not yet resolved as of this note.
-- **Vercel's env vars could not be checked from this session at all** — no Vercel CLI is
-  installed (same limitation as the Phase 1 deploy handoff), and there's no API/MCP access to
-  Vercel here. This needs the user to check the Vercel dashboard directly; flagging rather than
-  guessing.
+**Real constraint this surfaced, worth flagging clearly for submission/demo planning:** this
+Resend account currently sends from `onboarding@resend.dev` (Resend's shared sandbox address) and
+has **no verified sending domain**. As configured right now, it can only successfully email the
+account owner's own registered address — every other recipient will 403 (gracefully, but still
+undelivered). **Before the demo scenario (PRD §27) or grading, a domain needs to be verified at
+resend.com/domains and `RESEND_FROM_EMAIL` updated to use it**, or notification emails to any
+seed-data user other than the account owner will silently (well — loggedly) fail to send. Adding
+this as an explicit Reminders item below so it isn't missed near the deadline.
+
+**Also resolved this round:**
+- `SUPABASE_SERVICE_ROLE_KEY` — confirmed present in `.env.local` now (re-verified directly, not
+  taken on trust). Invite-user is now expected to actually work; still not re-tested end-to-end
+  (see Reminders).
+- **Vercel's env vars still could not be checked from this session** — no Vercel CLI/API access
+  exists here. The user said the values are "in .env.local and Vercel" — the `.env.local` half is
+  now independently confirmed; the Vercel half still can't be verified by me and needs the user's
+  own check of the dashboard.
 
 ## In Progress 🚧
 
+- **Verify domain at resend.com/domains and update `RESEND_FROM_EMAIL`** before the demo/grading
+  — see "real constraint" note in Phase 6 above. Without this, only the Resend account owner's own
+  email can receive notifications; every seed-data user's notification email will 403.
 - **Invite-user with the service-role key** — the key was added by the user this session, but the
   invite flow hasn't been re-tested since (last confirmed behavior was the clean-failure path
   before the key existed). Worth a quick real test soon.
@@ -453,8 +481,9 @@ deleted immediately after the run; both test scripts were deleted, not committed
 - [x] ~~Phase 4 — Workflow engine~~ **Done** — see Phase 4 section above.
 - [x] ~~Phase 5 — Inbox/My Memos/Completed~~ **Done** — see Phase 5 section above. (Memo details +
       timeline were already built as part of Phase 4.)
-- [x] ~~Phase 6 — Notifications~~ **Built** — see Phase 6 section above. Live email delivery
-      genuinely unverified pending the user's Resend account; not claimed as done.
+- [x] ~~Phase 6 — Notifications~~ **Done**, including verified live email delivery — see Phase 6
+      section above. (Sending domain still needs verification before demo/grading — flagged in
+      Reminders — but the code path and delivery mechanics are confirmed working.)
 - [ ] Phase 7 — Search, dashboard, reporting (regular-user search/visibility scope per PRD §2.5
       item 7 / §14 — narrower than org-wide, ties into the same `workflow_steps`-based visibility
       widening as Phase 4)
@@ -559,12 +588,14 @@ if needed. New entries below.)*
   directly, never seen in chat). Not yet re-tested against the invite-user flow.
 - Resend: still not configured.
 - Last migration applied: `20260829071500_019_workflow_assignment_notifications`.
-- `SUPABASE_SERVICE_ROLE_KEY`: confirmed absent from `.env.local` as of this session (see Phase 6
-  above) — needed for both invite-user and now notification-email dispatch. Unresolved.
-- `RESEND_API_KEY`/`RESEND_FROM_EMAIL`: present in `.env.local` but empty. No Resend account
-  exists yet per the user.
-- Vercel env vars (both of the above): **not checked** — no tooling available in this session to
-  inspect Vercel directly; needs the user to confirm via the Vercel dashboard.
+- `SUPABASE_SERVICE_ROLE_KEY`: confirmed present in `.env.local` (independently re-verified, not
+  taken on trust — see Phase 6). Not yet re-tested against invite-user specifically.
+- `RESEND_API_KEY`/`RESEND_FROM_EMAIL`: confirmed present and working — real delivery verified
+  (see Phase 6). `RESEND_FROM_EMAIL` is currently Resend's shared sandbox address
+  (`onboarding@resend.dev`); no custom domain verified yet, which caps delivery to the Resend
+  account owner's own email until that's done (see the flagged reminder above).
+- Vercel env vars: **still not checked from this session** — no Vercel CLI/API access exists
+  here. Needs the user's own confirmation via the dashboard.
 - New Storage bucket: `attachments` (private).
 - New tables this session: `workflow_steps`, `comments`, `audit_log`, `notifications`,
   `memo_versions`. New `private.` helper functions: `is_workflow_participant()`,
@@ -583,12 +614,12 @@ that need cleanup or intentional replacement first.
 - [ ] Confirm `.env.example` is fully in sync (now includes `SUPABASE_SERVICE_ROLE_KEY`).
 - [ ] Write the separate project documentation file (PRD §28.B).
 - [ ] Click-test the real email-confirmation link end-to-end.
-- [ ] Re-add `SUPABASE_SERVICE_ROLE_KEY` to `.env.local` + Vercel (confirmed missing this session),
-      then re-test invite-user AND notification email dispatch, which both now depend on it.
-- [ ] Set up a real Resend account (API key + verified from-address) and confirm actual email
-      delivery to a real inbox, matching the triggering event's content — not yet done.
-- [ ] Confirm both `SUPABASE_SERVICE_ROLE_KEY` and `RESEND_API_KEY`/`RESEND_FROM_EMAIL` are set in
-      Vercel's production env vars, not just locally (this session has no way to check Vercel
-      directly).
+- [ ] Re-test invite-user now that `SUPABASE_SERVICE_ROLE_KEY` is confirmed present locally.
+- [ ] **Verify a sending domain at resend.com/domains and update `RESEND_FROM_EMAIL`** — currently
+      capped to emailing only the Resend account owner's own address (confirmed via a real 403
+      from Resend). Do this before the demo scenario (PRD §27) or grading.
+- [ ] Confirm `SUPABASE_SERVICE_ROLE_KEY`/`RESEND_API_KEY`/`RESEND_FROM_EMAIL` are set in Vercel's
+      production env vars too, not just locally — this session has no way to check Vercel
+      directly, the user needs to confirm via the dashboard.
 - [ ] Enable "Leaked Password Protection" in the Supabase Auth dashboard before Phase 12.
 - [ ] Confirm the Vercel redeploy picked up this session's push and matches local `main`.
