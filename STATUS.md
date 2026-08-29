@@ -4,20 +4,19 @@
 rules. It is the source of truth for "what's the current state of the project" — more reliable
 than memory of prior sessions. Be precise and honest; "mostly done" is not an acceptable status.
 
-Last updated: 2026-08-29 (Phase 10 v2 session)
+Last updated: 2026-08-29 (Phases 11/12/13 session)
 Updated by: Claude Code
 
 ---
 
-## ⚠️ RUN IN PROGRESS — Phases 11/12/13 (continuous, no-stop run)
+## ✅ Phases 11/12/13 complete (continuous run, 2026-08-29)
 
-**Started 2026-08-29.** Running Phase 11 (seed data + demo walkthrough) → Phase 12 (security
-review) → Phase 13 (documentation + submission packaging) back-to-back per explicit user
-instruction, checkpointing this file periodically so the run can be resumed cleanly if
-interrupted. **If you're reading this marker, the run was interrupted before reaching the final
-consolidated summary — check the phase sections below for the last thing actually completed
-before continuing, don't assume anything past that point happened.** This marker is removed and
-replaced with a completion note once all three phases are genuinely done.
+Ran Phase 11 (seed data + demo walkthrough) → Phase 12 (security review) → Phase 13
+(documentation + submission packaging) back-to-back per explicit user instruction. All three are
+genuinely done — see each phase's section below for full detail and evidence. **Two items remain
+that only the user can finish** (repo visibility decision, AI-history export) — see Phase 13's
+submission-checklist section and the consolidated summary given to the user at the end of this
+run for the complete, explicit list.
 
 Progress log (updated as each concrete step lands):
 - [x] Phase 11: seed data built — see "Phase 11" section below.
@@ -29,9 +28,11 @@ Progress log (updated as each concrete step lands):
       section below for the complete findings log.
 - [x] Phase 12: `profiles_update_self` column-restriction fix (already-known open item) — **done**,
       see "Phase 12" section below for the full writeup (migration 027, 13/13 checks passed).
-- [ ] Phase 13: project documentation file
-- [ ] Phase 13: README/.env.example sync
-- [ ] Phase 13: final submission checklist review
+- [x] Phase 13: project documentation file — `docs/PROJECT-DOCUMENTATION.md` created.
+- [x] Phase 13: README/.env.example sync — README updated with live URL + demo credentials;
+      `.env.example` was already in sync, no changes needed.
+- [x] Phase 13: final submission checklist review — see "Phase 13" section below for the
+      item-by-item §28 result and the explicit open items that need the user's input.
 
 ## Phase 11 — Seed data + full demo scenario walkthrough (PRD §27)
 
@@ -332,21 +333,32 @@ code alone), in addition to the three findings above:
     (email/redirect links use the real env var in production, never a hardcoded insecure URL).
 15. **Injection-safe DB access** — see item 10's SQLi note above; same evidence covers both.
 
+**Phase 12 fixes committed (`9b7926a`) and pushed; re-verified against the redeployed production
+app**, not just locally: signed in fresh as a seeded user on `https://relay-cyan-alpha.vercel.app`
+after the redeploy finished — session works end-to-end, `document.cookie` is empty (httpOnly
+confirmed live in production, not just local dev), and memo 1's in-progress state (still with
+Sarah) is untouched, confirming the security fixes didn't disturb the Phase 11 demo data.
+
 ---
 
 ## Current Phase
 
-**Phase 10 was redone under a new design direction (v2) after the original Swiss/Basel pass
-didn't land with the user.** `DESIGN.md` was completely rewritten to a modern SaaS dashboard
-aesthetic (white/black/violet `#7E3BED`/lime `#C6FF34`, rounded corners, soft shadows, colored
-status pills — direct inversions of several Swiss rules). The entire "Phase 10" section below,
-including its "fully done vs. rough" breakdown, describes the **abandoned Swiss/Basel system**
-and is kept only as a historical record of that earlier pass — **do not use it as current design
-guidance.** See "**Phase 10 (v2) — Design direction change**" below for the current system and
-this round's actual done/rough breakdown, which supersedes it. Status: v2 pass done and
-self-QA'd across every page at both a narrow-mobile and the default pane width, zero
-overlap/clipping bugs left open, **pending the user's own visual review of the live Vercel deploy
-before Phase 11**, same as the original request for this phase.
+**All 13 build phases are now complete.** Phases 1–9 built the full application; Phase 10 went
+through two design passes (Swiss/Basel, then a full redo to the modern-SaaS v2 system after the
+user reviewed the first live — see below, the v2 section supersedes the original); Phases 11–13
+(seed data + demo walkthrough, security review, documentation/submission packaging) were run
+back-to-back in a single continuous session on 2026-08-29 — see their respective sections for full
+detail and evidence. **Two things remain that only the user can finish**: a decision on how the
+grader accesses the (currently private) GitHub repo, and exporting the AI prompt/response history
+— neither can be done from inside this session. See Phase 13's submission-checklist section for
+the complete, explicit list.
+
+**Design-system note (unchanged from before, kept for continuity)**: `DESIGN.md` was completely
+rewritten mid-project to a modern SaaS dashboard aesthetic (white/black/violet `#7E3BED`/lime
+`#C6FF34`, rounded corners, soft shadows, colored status pills) after the original Swiss/Basel
+pass didn't land with the user. The "Phase 10" section below (pre-v2) describes the **abandoned**
+system and is kept only as a historical record — **do not use it as current design guidance.**
+See "**Phase 10 (v2) — Design direction change**" for the system actually live today.
 
 ## Done ✅
 
@@ -1444,6 +1456,59 @@ re-looked-at").
 sign in for QA — no other data was changed. **The entire org, its users, and all related rows were
 deleted via SQL immediately after QA completed**, confirmed via a follow-up `count(*)` query
 returning 0, per this project's standing discipline of never leaving test artifacts behind.
+
+## Phase 13 — Documentation + submission packaging (PRD §28)
+
+**Project documentation** — `docs/PROJECT-DOCUMENTATION.md` created: system overview, a
+requirements-implemented table mapped against every PRD section, tech stack, an architecture
+diagram (Mermaid, covering frontend/backend/DB/auth/file storage/external services), database
+design + multi-tenancy explanation, workflow design explanation (including the full demo-scenario
+walkthrough and demo credentials table), a security section summarizing all three Phase 12
+findings, a vibe-coding process section (tools, how requirements were communicated, how output was
+evaluated, how errors were found/fixed — with concrete examples pulled from the real build
+history, not generic claims), known limitations, and a submission-links section.
+
+**README updated**: live Vercel URL, the full demo credentials table (7 accounts across both
+seeded orgs), and a pointer to the standalone documentation file. `.env.example` was checked
+against the actual `.env.local` variable names used in the app (`NEXT_PUBLIC_SUPABASE_URL`,
+`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`,
+`RESEND_FROM_EMAIL`, `NEXT_PUBLIC_APP_URL`) — already fully in sync, no changes needed.
+
+**A real gap in the source-code deliverable, found and fixed while packaging, not before**:
+migration `027_restrict_profile_self_update_columns` (the Phase 12 self-update-column fix) had
+been applied directly to the live database via the Supabase MCP's `apply_migration` tool but was
+never written out as a tracked `.sql` file in `supabase/migrations/` — meaning the actual live
+schema and the migrations folder in the graded source code had silently diverged. Caught by
+checking `git ls-files supabase/migrations` against `list_migrations` (27 logical migrations
+live, only 25 files tracked — the other discrepancy, 015/016, is expected and already documented,
+since those two share one file). Fixed by writing the migration file and **verifying it byte-
+matches what's actually live** via `pg_get_functiondef()`/`pg_get_triggerdef()` on the real
+function/trigger, not just trusting memory of what was typed into the MCP call earlier in this
+session.
+
+**Final `next build` (21/21 routes) + `eslint`: both clean.**
+
+### Submission checklist (PRD §28) — final review
+
+- [x] **A. Deployed application** — https://relay-cyan-alpha.vercel.app/, re-verified working
+      this session (signed in, session cookie confirmed httpOnly, dashboard/inbox render real
+      seeded data) *after* the Phase 12 security fixes were redeployed — not checked before the
+      final code landed.
+- [x] **B. Project documentation** — `docs/PROJECT-DOCUMENTATION.md`, covers every required
+      subsection.
+- [ ] **C. Source code** — the GitHub repository (https://github.com/arnobalam10-tech/PROJECT-3)
+      has complete source, all 27 migrations, the seed approach (documented in Phase 11 above --
+      the seed script itself was ephemeral/not committed, matching this project's standing
+      discipline of not committing throwaway scripts, but its exact steps and every resulting
+      row are fully documented), `.env.example`, and install/build/run instructions in
+      `README.md`. **Blocked on one decision only the user can make**: the repo is currently
+      **private** — see "What's needed from you" in the final summary.
+- [ ] **D. AI prompt/response history** — **blocked on the user**: this has to be exported from
+      the live Claude Code session itself; it cannot be generated after the fact or from inside
+      the session.
+- [x] **E. Demonstration credentials** — 7 accounts across 2 organizations (1 admin + regular
+      users each), documented in `README.md`, this file's Phase 11 section, and
+      `docs/PROJECT-DOCUMENTATION.md` §6.
 
 ## In Progress 🚧
 

@@ -354,6 +354,19 @@ project). As of this note:
     exactly one version of each afterward — see `STATUS.md`'s Phase 8 section for the query and
     result.
 
+26. `20260829090000_027_restrict_profile_self_update_columns` — **security fix (Phase 12)**:
+    `profiles_update_self` (migration 001) had no `with check` restricting which columns a
+    self-update may touch, since RLS predicates operate on rows, not columns — a regular user
+    could self-promote `role`, reassign `organization_id`/`department_id`, or change `status` via
+    a direct API call bypassing the app entirely. A column-level `GRANT`/`REVOKE` was considered
+    and rejected: `admin/users/actions.ts` updates those same columns on *other* users' rows
+    through the same RLS-gated `authenticated` client, so revoking column grants broadly would
+    have broken that legitimate admin path too. Fixed with a `BEFORE UPDATE` trigger
+    (`private.enforce_profile_self_update_columns()`) that only restricts a row when
+    `NEW.id = auth.uid()` (i.e. the caller updating their own row) — admins updating someone
+    else's row are unaffected. See `STATUS.md`'s Phase 12 section for the full write-up and the
+    13/13-check verification.
+
 ## Notes for Claude Code
 
 - Use Postgres `enum` types (or check constraints) for role/status/priority/etc. rather than
