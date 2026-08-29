@@ -107,9 +107,11 @@ FK can't be satisfied before the profile row exists).
 - **Invite-user with the service-role key** — the key was added by the user this session, but the
   invite flow hasn't been re-tested since (last confirmed behavior was the clean-failure path
   before the key existed). Worth a quick real test soon.
-- Vercel deploy currently reflects the Phase 2 commit (`f791a0f`) — this session's Relay rebrand
-  and Phase 3 work are committed locally and about to be pushed; Vercel should auto-redeploy on
-  push (GitHub integration), but that hasn't been confirmed yet as of this note.
+- ~~Vercel deploy currently reflects the Phase 2 commit~~ **Confirmed redeployed and live**
+  (`5fcd743`) — checked directly against production after pushing: landing page shows Relay
+  branding/copy, nav shows the "relay" wordmark, and `/memos/new` renders correctly (Tiptap editor,
+  department/category dropdowns populated from real data) — Vercel's GitHub auto-deploy is
+  confirmed working, took roughly 2-3 minutes after push.
 
 ## Not Started Yet
 
@@ -189,9 +191,9 @@ if needed. New entries below.)*
 
 - Supabase project: `nsu-memo-system`, ref `gzevdosekfffippelxmi`, region `ap-northeast-1`, free
   tier, ACTIVE_HEALTHY.
-- Vercel: **https://relay-cyan-alpha.vercel.app/** — confirmed live and working (landing, login,
-  authenticated dashboard all tested against production this session). Currently serving the
-  Phase 2 commit; Relay-rebrand + Phase 3 commit about to be pushed.
+- Vercel: **https://relay-cyan-alpha.vercel.app/** — confirmed live and working, serving the
+  latest commit (`5fcd743`): Relay branding, memo creation form with Tiptap all verified directly
+  against production, not just locally.
 - GitHub: https://github.com/arnobalam10-tech/PROJECT-3 (private).
 - `SUPABASE_SERVICE_ROLE_KEY`: set by the user in `.env.local` and Vercel (confirmed by the user
   directly, never seen in chat). Not yet re-tested against the invite-user flow.
