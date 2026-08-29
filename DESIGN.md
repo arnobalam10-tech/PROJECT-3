@@ -1,83 +1,117 @@
-# DESIGN.md — Visual System for This App
+# DESIGN.md — Visual System for This App (v2 — Modern SaaS)
 
-This app uses the Swiss/Basel style design system in full — see the `swiss-style-design` skill
-for the canonical rules (exact hex codes, type rules, grid). This file adapts those rules
-specifically to a data-dense workflow application, since the skill's examples lean toward
-posters/decks/social graphics.
+**This replaces the earlier Swiss/Basel version entirely.** Based on direct user feedback, the
+Swiss system didn't land — it read as too editorial/poster-like for a SaaS product. From this
+point on, follow this document only. Several rules below are direct *inversions* of the old
+system (rounded corners and soft shadows are now correct; colored status pills are now correct)
+— don't blend the two systems.
 
-**Consult the `frontend-design` skill and the `swiss-style-design` skill before building any
-component.** Do not improvise a generic "clean minimal" SaaS look — the specificity is the
-point.
+## Reference direction
 
-## Quick reference (from the skill — do not deviate)
+Modeled on modern SaaS dashboard products — see the four reference images provided (finance/
+invoice dashboard UIs: rounded cards, soft elevation shadows, generous whitespace, clear
+hierarchy, colorful but restrained status chips, avatar stacks, icon-rail sidebar nav, stat
+tiles with trend indicators). Relay should look like a real, polished, modern SaaS product —
+not a poster, not a default component-library starter.
+
+## Color palette (confirmed — use exactly these, drop the old Swiss palette entirely)
 
 ```
-Background #F4F1EA · Surface #FFFFFF · Border/ink #111111
-Accent (Swiss red, ONE per composition) #E32213 · soft tint #F9DCD8
-Text on primary #FFFFFF · Heading #111111 · Body #4A463E · Muted #8A867E
-Chart series order: #111111, #E32213, #8A867E, #DAD5C8
-Font: Archivo everywhere. Headlines ~15-22% of height, lowercase, letter-spacing -0.02 to -0.04em,
-line-height 0.92. Metadata: small uppercase, tracked out.
-Grid: visible 3-column grid, thin warm-gray vertical rules. 3px black rule top of every
-composition with uppercase metadata (name left / number right).
-NEVER: rounded corners, shadows, gradients, icons, photos, any 3rd hue, centered body text.
+Background:        #FFFFFF  (white — default page background everywhere)
+Ink / primary text: #000000  (Black)
+Primary accent:      #7E3BED  (Violet) — primary buttons, active nav state, links, focus rings,
+                                the main "brand" color used for anything actionable/primary
+Secondary accent:    #C6FF34  (Lime) — sparingly: success/positive signals, small highlight
+                                chips, celebratory moments (e.g. "Approved"). Never a large
+                                background fill — it's a spark of color, not a base color.
+Neutral grays (derive as needed, keep it to a small tidy set):
+  Surface:  #F7F7F9 (card backgrounds that sit on the white page background, subtle sections)
+  Border:   #E5E5EA
+  Muted text: #6E6E76
 ```
 
-## Adapting the system to an application UI
+Do not reuse any Swiss-system hex value (#F4F1EA, #E32213, #8A867E, etc.) anywhere from here on.
 
-A dashboard/inbox is not a poster — it needs density and legibility. Apply the system as
-structure and restraint, not literal poster-scale headlines everywhere:
+## Typography
 
-- **App shell:** 3px solid black top bar across every page, carrying the org name/logo
-  (left, small uppercase tracked-out) and the current page name or breadcrumb (right). Sidebar
-  or nav uses hairline warm-gray vertical rules to separate sections, not shadows or pills.
-- **Page headings** (e.g. "inbox", "memo details") can use the large lowercase Archivo
-  headline treatment — but scaled down from poster-scale to something like 28–40px, still
-  lowercase, still tight negative letter-spacing, still near-black. This is the one place per
-  page that gets "headline" treatment.
-- **Tables/lists (inbox, my memos, audit log, etc.):** solid black hairline row dividers, no
-  zebra-striping in a third color, no rounded row cards. Column headers are small uppercase
-  tracked-out metadata style, muted gray.
-- **Status indicators:** render as small uppercase tracked-out labels (metadata style), not
-  colored pill badges — since we only get one red per composition. Use near-black for neutral/
-  in-progress statuses, muted gray (`#8A867E`) for completed/inactive, and reserve the single
-  red accent specifically for **whatever currently requires the viewing user's action** (e.g. a
-  memo in their inbox awaiting their decision, or an "Urgent" priority marker on the item that
-  needs attention right now). This directly satisfies the PRD's UI requirement that "current
-  workflow state and required action should be visually obvious" — red *is* the "act now"
-  signal in this system, used sparingly and consistently, never decoratively.
-- **Buttons:** square corners, solid black fill for primary actions with white text, or
-  black-outlined ghost buttons for secondary actions. The one exception: a destructive action
-  like "Reject" may use the red accent on that button specifically — but if a page already has
-  a red accent elsewhere (e.g. an urgent-priority tag), don't double up; fall back to a black
-  outlined button with red-colored text label instead, to preserve the one-accent rule per
-  screen as closely as practical. Use judgment here — the point is restraint, not a rigid
-  count.
-- **Forms** (memo creation, profile, admin): 3-column grid where it fits (e.g. metadata fields
-  laid out across columns with hairline dividers), single-column stacking on mobile. Inputs are
-  square-cornered, black-outlined, no drop shadows or glow on focus — use a solid black
-  2px focus outline instead.
-- **Charts (reporting/dashboard):** exactly as the skill specifies — solid black bars, one red
-  "key" series (e.g. "pending" or "urgent" counts), 4px black baseline, no gridlines, plain
-  numeral labels.
-- **Timeline (memo details page):** a vertical hairline rule with square black event markers;
-  the current/pending step gets the red marker, completed steps get black, future steps get
-  muted gray outline-only markers. This is a natural, high-value use of the "one red accent
-  marks the key thing" rule.
-- **Empty states / section breaks (e.g. "no memos in your inbox"):** may use the full
-  black-background + giant white numeral/word treatment sparingly (e.g. a "0" or short phrase),
-  but don't overuse this — it's a strong, occasional device, not a default empty-state pattern
-  for a dense app.
+Clean modern sans-serif — Inter is a safe default; keep Archivo only if it's already wired up
+and drop the Swiss-specific treatment (no forced lowercase branding, no aggressive negative
+letter-spacing, no 0.92 line-height poster headlines). Standard sentence case. Clear, comfortable
+hierarchy: page title > section header > body > caption/metadata, with generous line-height for
+readability, not tightness for drama.
 
-## Strictly avoid (repeating the skill's rules in an app context)
+## Components — what "clean, modern SaaS" means concretely here
 
-- Rounded corners anywhere — cards, buttons, inputs, avatars (use square crops), modals.
-- Drop shadows, glows, blur-based elevation. Use hairline black/gray borders to separate
-  surfaces instead.
-- Gradients, including subtle ones on buttons or backgrounds.
-- Icon libraries as decoration. If something needs a visual marker (status, priority), use
-  type, a rule, or a geometric shape (square/dot) in the palette — not a pictographic icon set.
-  Functional icons that are genuinely load-bearing for usability (e.g. a close "×" on a modal)
-  are fine as typographic characters, not imported icon-font glyphs.
-- A third hue anywhere, including in charts, avatars, or category tags — reuse black/gray/red
-  tints only.
+- **Sidebar nav:** icon rail (icon + label), rounded active-state background using the violet
+  accent at low opacity, comfortable padding, clear separation from the content area.
+- **Top bar:** search input, notification bell with an unread-count dot, user avatar. Generous
+  spacing — nothing crammed together.
+- **Cards:** white or light-gray-surface background, rounded corners (~12–16px radius), a soft
+  low-opacity drop shadow (not a hard border-only look), generous internal padding. This is a
+  direct reversal of the old "no shadows, no rounded corners" rule.
+- **Stat tiles:** a large number, a short label, a small trend indicator (↑/↓ plus a percentage),
+  optionally a tiny sparkline. Keep each tile visually uncluttered — one clear number as the
+  hero of the tile.
+- **Status indicators:** rounded pill/chip badges with a colored background + matching colored
+  text — e.g. a soft green for Approved/Completed, amber/orange for Pending, violet or a clear
+  warm color for anything needing the user's action now, gray for Rejected/Inactive. This
+  reverses the old "text-label-only, no colored pills" rule.
+- **Avatars:** circular, overlapping slightly when stacked (e.g. showing multiple workflow
+  participants at a glance).
+- **Tables/lists:** clear row separation (hairline divider or subtle alternating background),
+  avatar+name for people columns, right-aligned numeric/status columns. At narrow widths,
+  collapse to a card layout or allow horizontal scroll — never let columns compress until text
+  overlaps or truncates unreadably.
+- **Buttons:** rounded corners, solid violet fill for primary actions with white text, white
+  background + border for secondary/ghost actions. Every interactive state (hover, active,
+  disabled) must be visibly, actually different — re-verify this specifically, since a
+  same-color hover bug already slipped through once.
+- **Charts:** violet / lime / black / neutral-gray palette, soft gridlines are fine, rounded bar
+  tops are fine — this is a reversal of the old bare-bars, no-gridlines rule.
+
+## Hard rule: no overlapping or colliding elements, anywhere
+
+Every screen, at every breakpoint you actually test, must have zero instances of text sitting on
+top of other text or images, unexpectedly clipped/truncated labels, or elements visually
+overlapping. This needs to be checked by actually looking at rendered screenshots, not inferred
+from "the Tailwind classes look correct" — that reasoning has already produced a bug in this
+project once (search silently swallowing errors) via the same kind of "should be fine" logic;
+don't repeat that pattern here on something the user explicitly flagged as the core complaint.
+
+## "No AI slop" — concretely avoid
+
+- The default, unmodified shadcn/Tailwind starter look with no real customization.
+- A generic purple-to-blue gradient hero with a vague abstract blob and no real content.
+- Placeholder-sounding hero copy ("The all-in-one platform for X") that isn't specific to what
+  Relay actually does.
+- Inconsistent spacing between sections — pick a spacing scale (e.g. Tailwind's default scale)
+  and apply it consistently rather than ad hoc per component.
+- Icon usage that's purely decorative and mismatched in style across the app.
+- Any component that looks copy-pasted without being adapted to its actual container (overflow,
+  awkward wrapping, misaligned columns).
+
+## Landing page — needs a real rebuild, this is the priority
+
+The current landing page isn't working for the user. Rebuild it as an actual modern SaaS
+marketing page with real substance:
+
+1. **Hero** — a clear, specific headline stating what Relay is in plain language (not vague
+   SaaS-speak), a supporting subheadline, a primary CTA ("Create your organization") and a
+   secondary CTA ("Sign in"), and a **real visual mockup of the product** — a browser-frame or
+   device-frame showing an actual (simplified, static) version of the dashboard, built from the
+   app's real components/colors, not a stock illustration. This is the single most important
+   element on the page.
+2. **How it works** — the sequential workflow explained visually (reuse the Employee → Dept
+   Head → Finance → Director example already in the spec), as a real step diagram, not a plain
+   text list.
+3. **Feature highlights** — 3–4 short callouts (e.g. "Sequential approvals," "Full audit trail,"
+   "Multi-tenant by design," "Real-time notifications"), each with a small icon and one or two
+   lines of copy.
+4. **A second product mockup** — a static, real-component-based preview of a memo/workflow
+   detail view (this is the "employee page" — what it looks like for someone acting on a memo
+   day to day), giving visitors a genuine sense of using the app.
+5. **Footer** — simple: product name, maybe a couple of links. Nothing elaborate needed.
+
+Mockups should look like real product screenshots (built from the actual UI components/colors),
+not illustrative graphics — that's what makes this read as a genuine SaaS product rather than a
+template.

@@ -2,6 +2,11 @@ import Link from "next/link";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { logQueryError } from "@/lib/log-query-error";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { PriorityBadge, initials } from "@/components/memo-badges";
+import { SelectFilter } from "@/components/select-filter";
 
 type SortKey = "submitted_at" | "priority" | "age";
 
@@ -32,12 +37,6 @@ export default async function InboxPage({
     .order("name");
   logQueryError("inbox.departments", departmentsError);
 
-  // PRD §19: an active delegate sees what's delegated to them in their own
-  // inbox too, not just the direct holder. today's date is compared against
-  // start_date/end_date directly (not the stored status label) — same
-  // enforcement logic as private.assert_current_holder() in the DB, so a
-  // delegation that's simply run past its end_date drops out of the inbox
-  // immediately without needing anything to flip its status first.
   const today = new Date().toISOString().slice(0, 10);
   const { data: activeDelegations, error: delegationsError } = await supabase
     .from("delegations")
@@ -113,7 +112,7 @@ export default async function InboxPage({
     if (params.priority) qp.set("priority", params.priority);
     if (params.department) qp.set("department", params.department);
     return (
-      <Link href={`/inbox?${qp.toString()}`} className="hover:underline">
+      <Link href={`/inbox?${qp.toString()}`} className="hover:text-foreground">
         {label}
         {sort === key ? (dir === "asc" ? " ↑" : " ↓") : ""}
       </Link>
@@ -121,83 +120,94 @@ export default async function InboxPage({
   }
 
   return (
-    <main className="mx-auto max-w-5xl">
-      <h1 className="mb-8 text-3xl headline">inbox</h1>
+    <div className="mx-auto max-w-6xl">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Inbox</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Memos currently waiting on you.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <SelectFilter
+            paramName="priority"
+            placeholder="All priorities"
+            options={[
+              { value: "normal", label: "Normal" },
+              { value: "high", label: "High" },
+              { value: "urgent", label: "Urgent" },
+            ]}
+          />
+          <SelectFilter
+            paramName="department"
+            placeholder="All departments"
+            options={(departments ?? []).map((d) => ({ value: d.id, label: d.name }))}
+          />
+        </div>
+      </div>
 
-      <form className="mb-6 flex flex-wrap gap-3 text-sm" action="/inbox">
-        <select name="priority" defaultValue={params.priority ?? ""} className="border border-ink bg-surface px-3 py-2">
-          <option value="">All priorities</option>
-          <option value="normal">Normal</option>
-          <option value="high">High</option>
-          <option value="urgent">Urgent</option>
-        </select>
-        <select name="department" defaultValue={params.department ?? ""} className="border border-ink bg-surface px-3 py-2">
-          <option value="">All departments</option>
-          {(departments ?? []).map((d) => (
-            <option key={d.id} value={d.id}>
-              {d.name}
-            </option>
-          ))}
-        </select>
-        <button type="submit" className="border border-ink px-3 py-2 font-medium">
-          filter
-        </button>
-      </form>
-
-      <table className="w-full border-collapse text-sm">
-        <thead>
-          <tr className="border-b border-ink text-left text-xs uppercase tracking-wide text-muted">
-            <th className="py-2">Number</th>
-            <th className="py-2">Subject</th>
-            <th className="py-2">Sender</th>
-            <th className="py-2">Department</th>
-            <th className="py-2">{sortLink("priority", "Priority")}</th>
-            <th className="py-2">Status</th>
-            <th className="py-2">{sortLink("submitted_at", "Submitted")}</th>
-            <th className="py-2">Required Action</th>
-            <th className="py-2">{sortLink("age", "Age")}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((row) => (
-            <tr key={row.id} className="border-b border-rule">
-              <td className="py-3 font-mono text-xs">{row.memos.memo_number}</td>
-              <td className="py-3">
-                <Link href={`/memos/${row.memos.id}`} className="font-medium underline">
-                  {row.memos.subject}
-                </Link>
-                {row.assigned_user_id !== profile.id && (
-                  <span className="ml-2 text-xs text-muted">
-                    (as delegate for {delegatorNameById.get(row.assigned_user_id) ?? "—"})
-                  </span>
-                )}
-              </td>
-              <td className="py-3">{row.memos.profiles?.name ?? "—"}</td>
-              <td className="py-3">{row.memos.departments?.name ?? "—"}</td>
-              <td className="py-3 text-xs font-medium uppercase tracking-wide">
-                {row.memos.priority === "urgent" ? (
-                  <span className="text-accent">{row.memos.priority}</span>
-                ) : (
-                  row.memos.priority
-                )}
-              </td>
-              <td className="py-3 text-xs font-medium uppercase tracking-wide">{row.memos.status}</td>
-              <td className="py-3 text-body">
-                {row.memos.submitted_at ? new Date(row.memos.submitted_at).toLocaleDateString() : "—"}
-              </td>
-              <td className="py-3 text-xs font-medium uppercase tracking-wide text-accent">Review &amp; decide</td>
-              <td className="py-3 text-body">{formatAge(row.updated_at)}</td>
-            </tr>
-          ))}
-          {items.length === 0 && (
-            <tr>
-              <td colSpan={9} className="py-6 text-center text-muted">
-                Nothing awaiting your action.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-    </main>
+      <div className="rounded-xl border bg-card shadow-sm">
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Memo</TableHead>
+                <TableHead>Sender</TableHead>
+                <TableHead>Department</TableHead>
+                <TableHead>{sortLink("priority", "Priority")}</TableHead>
+                <TableHead>{sortLink("submitted_at", "Submitted")}</TableHead>
+                <TableHead>Required action</TableHead>
+                <TableHead className="text-right">{sortLink("age", "Age")}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {items.map((row) => (
+                <TableRow key={row.id}>
+                  <TableCell className="max-w-64">
+                    <Link href={`/memos/${row.memos.id}`} className="font-medium hover:underline">
+                      {row.memos.subject}
+                    </Link>
+                    <p className="text-xs text-muted-foreground">
+                      {row.memos.memo_number}
+                      {row.assigned_user_id !== profile.id && (
+                        <> · as delegate for {delegatorNameById.get(row.assigned_user_id) ?? "—"}</>
+                      )}
+                    </p>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <Avatar className="h-6 w-6">
+                        <AvatarFallback className="text-[10px]">
+                          {initials(row.memos.profiles?.name ?? "—")}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="whitespace-nowrap text-sm">{row.memos.profiles?.name ?? "—"}</span>
+                    </div>
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+                    {row.memos.departments?.name ?? "—"}
+                  </TableCell>
+                  <TableCell><PriorityBadge priority={row.memos.priority} /></TableCell>
+                  <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+                    {row.memos.submitted_at ? new Date(row.memos.submitted_at).toLocaleDateString() : "—"}
+                  </TableCell>
+                  <TableCell>
+                    <Badge className="bg-primary/10 text-primary hover:bg-primary/10">Review &amp; decide</Badge>
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-right text-sm text-muted-foreground">
+                    {formatAge(row.updated_at)}
+                  </TableCell>
+                </TableRow>
+              ))}
+              {items.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
+                    Nothing awaiting your action.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </div>
+    </div>
   );
 }

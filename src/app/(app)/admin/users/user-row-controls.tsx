@@ -3,6 +3,10 @@
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { updateUserRole, updateUserDepartment, toggleUserStatus } from "./actions";
+import { Button } from "@/components/ui/button";
+
+const selectClasses =
+  "h-8 rounded-lg border border-input bg-transparent px-2 text-xs shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50";
 
 type Props = {
   userId: string;
@@ -18,7 +22,7 @@ export function UserRowControls({ userId, role, status, departmentId, department
   const [pending, startTransition] = useTransition();
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2">
       <select
         defaultValue={role}
         disabled={isSelf || pending}
@@ -28,7 +32,7 @@ export function UserRowControls({ userId, role, status, departmentId, department
             router.refresh();
           })
         }
-        className="border border-ink bg-surface px-2 py-1 text-xs disabled:opacity-50"
+        className={selectClasses}
       >
         <option value="regular_user">Regular user</option>
         <option value="org_admin">Org admin</option>
@@ -42,17 +46,17 @@ export function UserRowControls({ userId, role, status, departmentId, department
             router.refresh();
           })
         }
-        className="border border-ink bg-surface px-2 py-1 text-xs"
+        className={selectClasses}
       >
         <option value="">— no department —</option>
         {departments.map((d) => (
-          <option key={d.id} value={d.id}>
-            {d.name}
-          </option>
+          <option key={d.id} value={d.id}>{d.name}</option>
         ))}
       </select>
-      <button
+      <Button
         type="button"
+        variant="outline"
+        size="sm"
         disabled={isSelf || pending}
         onClick={() =>
           startTransition(async () => {
@@ -60,10 +64,9 @@ export function UserRowControls({ userId, role, status, departmentId, department
             router.refresh();
           })
         }
-        className="border border-ink px-3 py-1 text-xs font-medium uppercase tracking-wide disabled:opacity-50"
       >
-        {status === "active" ? "deactivate" : "activate"}
-      </button>
+        {status === "active" ? "Deactivate" : "Activate"}
+      </Button>
     </div>
   );
 }

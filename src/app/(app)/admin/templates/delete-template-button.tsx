@@ -1,48 +1,16 @@
 "use client";
 
-import { useTransition, useState } from "react";
-import { useRouter } from "next/navigation";
+import { ConfirmActionButton } from "@/components/confirm-action-button";
 import { deleteTemplate } from "./actions";
 
 export function DeleteTemplateButton({ templateId }: { templateId: string }) {
-  const [confirming, setConfirming] = useState(false);
-  const [pending, startTransition] = useTransition();
-  const router = useRouter();
-
-  if (!confirming) {
-    return (
-      <button
-        type="button"
-        onClick={() => setConfirming(true)}
-        className="text-xs font-medium uppercase tracking-wide text-accent underline"
-      >
-        delete
-      </button>
-    );
-  }
-
   return (
-    <span className="flex items-center gap-2 text-xs">
-      <button
-        type="button"
-        disabled={pending}
-        onClick={() =>
-          startTransition(async () => {
-            await deleteTemplate(templateId);
-            router.refresh();
-          })
-        }
-        className="font-medium uppercase tracking-wide text-accent underline disabled:opacity-50"
-      >
-        confirm delete
-      </button>
-      <button
-        type="button"
-        onClick={() => setConfirming(false)}
-        className="font-medium uppercase tracking-wide underline"
-      >
-        cancel
-      </button>
-    </span>
+    <ConfirmActionButton
+      label="Delete"
+      title="Delete this template?"
+      description="This can't be undone. Memos already built from it are unaffected."
+      confirmLabel="Delete"
+      onConfirm={() => deleteTemplate(templateId)}
+    />
   );
 }

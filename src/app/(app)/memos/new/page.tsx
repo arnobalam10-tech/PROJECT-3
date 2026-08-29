@@ -28,9 +28,12 @@ export default async function NewMemoPage() {
   logQueryError("memos.new.categories", categoriesError);
 
   return (
-    <main className="mx-auto max-w-3xl">
-      <h1 className="mb-8 text-3xl headline">new memo</h1>
+    <div className="mx-auto max-w-3xl">
+      <div className="mb-6">
+        <h1 className="text-2xl font-semibold tracking-tight">New memo</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Draft it now, submit it when you&apos;re ready.</p>
+      </div>
       <MemoForm mode="create" departments={departments ?? []} categories={categories ?? []} />
-    </main>
+    </div>
   );
 }

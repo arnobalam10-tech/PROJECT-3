@@ -2,6 +2,10 @@
 
 import { useActionState, useRef, useEffect } from "react";
 import { createDepartment } from "./actions";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
 
 export function NewDepartmentForm() {
   const [state, formAction, pending] = useActionState(createDepartment, { error: null });
@@ -14,34 +18,23 @@ export function NewDepartmentForm() {
   }, [pending, state.error]);
 
   return (
-    <form ref={formRef} action={formAction} className="mb-8 flex flex-wrap items-end gap-3">
-      <label className="flex flex-col gap-1">
-        <span className="text-xs font-medium uppercase tracking-wide text-muted">Name</span>
-        <input
-          type="text"
-          name="name"
-          required
-          className="border border-ink px-3 py-2 outline-none focus:outline-2 focus:outline-ink"
-        />
-      </label>
-      <label className="flex flex-col gap-1">
-        <span className="text-xs font-medium uppercase tracking-wide text-muted">
-          Description
-        </span>
-        <input
-          type="text"
-          name="description"
-          className="border border-ink px-3 py-2 outline-none focus:outline-2 focus:outline-ink"
-        />
-      </label>
-      <button
-        type="submit"
-        disabled={pending}
-        className="bg-ink px-4 py-2 font-medium text-surface disabled:opacity-50"
-      >
-        {pending ? "adding…" : "add department"}
-      </button>
-      {state.error && <p className="w-full text-sm text-accent">{state.error}</p>}
-    </form>
+    <Card>
+      <CardContent>
+        <form ref={formRef} action={formAction} className="flex flex-wrap items-end gap-3">
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="dept-name">Name</Label>
+            <Input id="dept-name" type="text" name="name" required className="w-48" />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="dept-description">Description</Label>
+            <Input id="dept-description" type="text" name="description" className="w-64" />
+          </div>
+          <Button type="submit" disabled={pending}>
+            {pending ? "Adding…" : "Add department"}
+          </Button>
+          {state.error && <p className="w-full text-sm text-destructive">{state.error}</p>}
+        </form>
+      </CardContent>
+    </Card>
   );
 }

@@ -1,6 +1,11 @@
 import { requireOrgAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { logQueryError } from "@/lib/log-query-error";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 const EVENT_TYPE_LABELS: Record<string, string> = {
   memo_submission: "Memo submitted",
@@ -27,6 +32,9 @@ type Row = {
   user: { name: string } | null;
   on_behalf_of: { name: string } | null;
 };
+
+const selectClasses =
+  "h-9 rounded-lg border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 
 export default async function AuditLogPage({
   searchParams,
@@ -64,79 +72,84 @@ export default async function AuditLogPage({
   const items = (rows ?? []) as unknown as Row[];
 
   return (
-    <main className="mx-auto max-w-5xl">
-      <h1 className="mb-2 text-3xl headline">audit log</h1>
-      <p className="mb-8 text-sm text-body">
-        System-wide, append-only record (PRD §21). Nothing here can be edited or deleted through
-        the app — by any role, including admins — see the security review notes in{" "}
-        <code>STATUS.md</code> for how that was verified.
-      </p>
+    <div className="mx-auto max-w-6xl">
+      <div className="mb-6">
+        <h1 className="text-2xl font-semibold tracking-tight">Audit log</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          System-wide, append-only record. Nothing here can be edited or deleted through the app
+          — by any role, including admins.
+        </p>
+      </div>
 
-      <form className="mb-6 flex flex-wrap gap-3 text-sm" action="/admin/audit-log">
-        <select name="event_type" defaultValue={params.event_type ?? ""} className="border border-ink bg-surface px-3 py-2">
-          <option value="">All event types</option>
-          {Object.entries(EVENT_TYPE_LABELS).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </select>
-        <select name="user" defaultValue={params.user ?? ""} className="border border-ink bg-surface px-3 py-2">
-          <option value="">All users</option>
-          {(members ?? []).map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.name}
-            </option>
-          ))}
-        </select>
-        <input type="date" name="from" defaultValue={params.from} className="border border-ink px-3 py-2" />
-        <input type="date" name="to" defaultValue={params.to} className="border border-ink px-3 py-2" />
-        <button type="submit" className="border border-ink px-3 py-2 font-medium">
-          filter
-        </button>
-      </form>
+      <Card className="mb-6">
+        <CardContent>
+          <form className="flex flex-wrap gap-3" action="/admin/audit-log">
+            <select name="event_type" defaultValue={params.event_type ?? ""} className={selectClasses}>
+              <option value="">All event types</option>
+              {Object.entries(EVENT_TYPE_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+            <select name="user" defaultValue={params.user ?? ""} className={selectClasses}>
+              <option value="">All users</option>
+              {(members ?? []).map((m) => (
+                <option key={m.id} value={m.id}>{m.name}</option>
+              ))}
+            </select>
+            <Input type="date" name="from" defaultValue={params.from} className="w-40" />
+            <Input type="date" name="to" defaultValue={params.to} className="w-40" />
+            <Button type="submit" variant="outline">Filter</Button>
+          </form>
+        </CardContent>
+      </Card>
 
-      <table className="w-full border-collapse text-sm">
-        <thead>
-          <tr className="border-b border-ink text-left text-xs uppercase tracking-wide text-muted">
-            <th className="py-2">When</th>
-            <th className="py-2">Event</th>
-            <th className="py-2">User</th>
-            <th className="py-2">Description</th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((row) => (
-            <tr key={row.id} className="border-b border-rule">
-              <td className="py-3 text-body">{new Date(row.created_at).toLocaleString()}</td>
-              <td className="py-3 text-xs font-medium uppercase tracking-wide">
-                {EVENT_TYPE_LABELS[row.event_type] ?? row.event_type}
-              </td>
-              <td className="py-3">
-                {row.user?.name ?? "—"}
-                {row.on_behalf_of && (
-                  <span className="ml-1 text-xs text-muted">
-                    (on behalf of {row.on_behalf_of.name})
-                  </span>
-                )}
-              </td>
-              <td className="py-3 text-body">{row.description ?? "—"}</td>
-            </tr>
-          ))}
-          {items.length === 0 && (
-            <tr>
-              <td colSpan={4} className="py-6 text-center text-muted">
-                No matching events.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
+      <div className="rounded-xl border bg-card shadow-sm">
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>When</TableHead>
+                <TableHead>Event</TableHead>
+                <TableHead>User</TableHead>
+                <TableHead>Description</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {items.map((row) => (
+                <TableRow key={row.id}>
+                  <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+                    {new Date(row.created_at).toLocaleString()}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="secondary">{EVENT_TYPE_LABELS[row.event_type] ?? row.event_type}</Badge>
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-sm">
+                    {row.user?.name ?? "—"}
+                    {row.on_behalf_of && (
+                      <span className="ml-1 text-xs text-muted-foreground">
+                        (on behalf of {row.on_behalf_of.name})
+                      </span>
+                    )}
+                  </TableCell>
+                  <TableCell className="max-w-96 text-sm text-muted-foreground">{row.description ?? "—"}</TableCell>
+                </TableRow>
+              ))}
+              {items.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={4} className="py-10 text-center text-muted-foreground">
+                    No matching events.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </div>
       {items.length === 200 && (
-        <p className="mt-3 text-xs text-muted">
+        <p className="mt-3 text-xs text-muted-foreground">
           Showing the most recent 200 matching events — narrow the filters above to see more.
         </p>
       )}
-    </main>
+    </div>
   );
 }

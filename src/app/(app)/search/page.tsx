@@ -2,17 +2,14 @@ import Link from "next/link";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { logQueryError } from "@/lib/log-query-error";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { STATUS_LABELS, StatusBadge, PriorityBadge } from "@/components/memo-badges";
 
-const STATUS_LABELS: Record<string, string> = {
-  draft: "Draft",
-  submitted: "Submitted",
-  pending_review: "Pending Review",
-  pending_approval: "Pending Approval",
-  changes_requested: "Changes Requested",
-  rejected: "Rejected",
-  approved: "Approved",
-  cancelled: "Cancelled",
-};
+const fieldClasses =
+  "h-9 w-full rounded-lg border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 
 type SearchParams = {
   q?: string;
@@ -62,12 +59,6 @@ export default async function SearchPage({
   }> = [];
 
   if (hasAnyFilter) {
-    // No new authorization logic here on purpose — this is the exact same
-    // memos_select_authorized RLS policy (author/admin/participant, scoped
-    // to organization_id) already exhaustively tested in Phase 5. Search is
-    // just filters layered on top of an already-scoped table; it cannot
-    // surface a row direct navigation wouldn't already allow, and it can
-    // never cross organization_id regardless of what filters are supplied.
     let query = supabase
       .from("memos")
       .select(
@@ -76,12 +67,6 @@ export default async function SearchPage({
 
     if (params.q) {
       const q = params.q.replace(/[%_]/g, "\\$&");
-      // body is jsonb (Tiptap doc format) — Postgres has no ilike operator
-      // for jsonb, so this filters against body_text, a trigger-maintained
-      // plain-text mirror of body's content (see migration 020). Filtering
-      // against `body` directly throws a Postgres type error that silently
-      // degraded every search to "no matches" — caught only by testing
-      // against real data.
       query = query.or(`memo_number.ilike.%${q}%,subject.ilike.%${q}%,body_text.ilike.%${q}%`);
     }
     if (params.author) query = query.eq("author_id", params.author);
@@ -94,144 +79,135 @@ export default async function SearchPage({
 
     const { data, error } = await query.order("submitted_at", { ascending: false }).limit(100);
     if (error) {
-      // Never swallow this silently — a query error here previously looked
-      // identical to "no matches" and hid a real bug (see migration 020).
       console.error("[search] query failed:", error);
     }
     results = (data ?? []) as unknown as typeof results;
   }
 
   return (
-    <main className="mx-auto max-w-5xl">
-      <h1 className="mb-8 text-3xl headline">search</h1>
+    <div className="mx-auto max-w-6xl">
+      <div className="mb-6">
+        <h1 className="text-2xl font-semibold tracking-tight">Search</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Find any memo you&apos;re authorized to see.</p>
+      </div>
 
-      <form className="mb-8 grid grid-cols-1 gap-3 border border-ink p-4 text-sm sm:grid-cols-3">
-        <label className="flex flex-col gap-1 sm:col-span-3">
-          <span className="text-xs font-medium uppercase tracking-wide text-muted">
-            Memo number, subject, or body
-          </span>
-          <input
-            type="text"
-            name="q"
-            defaultValue={params.q}
-            className="border border-ink px-3 py-2"
-          />
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium uppercase tracking-wide text-muted">Author</span>
-          <select name="author" defaultValue={params.author ?? ""} className="border border-ink bg-surface px-3 py-2">
-            <option value="">Any</option>
-            {(members ?? []).map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium uppercase tracking-wide text-muted">Department</span>
-          <select name="department" defaultValue={params.department ?? ""} className="border border-ink bg-surface px-3 py-2">
-            <option value="">Any</option>
-            {(departments ?? []).map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium uppercase tracking-wide text-muted">Category</span>
-          <select name="category" defaultValue={params.category ?? ""} className="border border-ink bg-surface px-3 py-2">
-            <option value="">Any</option>
-            {(categories ?? []).map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium uppercase tracking-wide text-muted">Status</span>
-          <select name="status" defaultValue={params.status ?? ""} className="border border-ink bg-surface px-3 py-2">
-            <option value="">Any</option>
-            {Object.entries(STATUS_LABELS).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium uppercase tracking-wide text-muted">Priority</span>
-          <select name="priority" defaultValue={params.priority ?? ""} className="border border-ink bg-surface px-3 py-2">
-            <option value="">Any</option>
-            <option value="normal">Normal</option>
-            <option value="high">High</option>
-            <option value="urgent">Urgent</option>
-          </select>
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium uppercase tracking-wide text-muted">Submitted from</span>
-          <input type="date" name="from" defaultValue={params.from} className="border border-ink px-3 py-2" />
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium uppercase tracking-wide text-muted">Submitted to</span>
-          <input type="date" name="to" defaultValue={params.to} className="border border-ink px-3 py-2" />
-        </label>
-        <div className="flex items-end">
-          <button type="submit" className="w-full bg-ink px-4 py-2 font-medium text-surface">
-            search
-          </button>
-        </div>
-      </form>
+      <Card className="mb-6">
+        <CardContent>
+          <form className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <label className="flex flex-col gap-1.5 sm:col-span-3">
+              <span className="text-xs font-medium text-muted-foreground">Memo number, subject, or body</span>
+              <Input type="text" name="q" defaultValue={params.q} />
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-xs font-medium text-muted-foreground">Author</span>
+              <select name="author" defaultValue={params.author ?? ""} className={fieldClasses}>
+                <option value="">Any</option>
+                {(members ?? []).map((m) => (
+                  <option key={m.id} value={m.id}>{m.name}</option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-xs font-medium text-muted-foreground">Department</span>
+              <select name="department" defaultValue={params.department ?? ""} className={fieldClasses}>
+                <option value="">Any</option>
+                {(departments ?? []).map((d) => (
+                  <option key={d.id} value={d.id}>{d.name}</option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-xs font-medium text-muted-foreground">Category</span>
+              <select name="category" defaultValue={params.category ?? ""} className={fieldClasses}>
+                <option value="">Any</option>
+                {(categories ?? []).map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-xs font-medium text-muted-foreground">Status</span>
+              <select name="status" defaultValue={params.status ?? ""} className={fieldClasses}>
+                <option value="">Any</option>
+                {Object.entries(STATUS_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-xs font-medium text-muted-foreground">Priority</span>
+              <select name="priority" defaultValue={params.priority ?? ""} className={fieldClasses}>
+                <option value="">Any</option>
+                <option value="normal">Normal</option>
+                <option value="high">High</option>
+                <option value="urgent">Urgent</option>
+              </select>
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-xs font-medium text-muted-foreground">Submitted from</span>
+              <Input type="date" name="from" defaultValue={params.from} />
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-xs font-medium text-muted-foreground">Submitted to</span>
+              <Input type="date" name="to" defaultValue={params.to} />
+            </label>
+            <div className="flex items-end">
+              <Button type="submit" className="w-full">Search</Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
 
       {hasAnyFilter ? (
-        <table className="w-full border-collapse text-sm">
-          <thead>
-            <tr className="border-b border-ink text-left text-xs uppercase tracking-wide text-muted">
-              <th className="py-2">Number</th>
-              <th className="py-2">Subject</th>
-              <th className="py-2">Author</th>
-              <th className="py-2">Department</th>
-              <th className="py-2">Status</th>
-              <th className="py-2">Priority</th>
-              <th className="py-2">Submitted</th>
-            </tr>
-          </thead>
-          <tbody>
-            {results.map((m) => (
-              <tr key={m.id} className="border-b border-rule">
-                <td className="py-3 font-mono text-xs">{m.memo_number}</td>
-                <td className="py-3">
-                  <Link href={`/memos/${m.id}`} className="font-medium underline">
-                    {m.subject}
-                  </Link>
-                </td>
-                <td className="py-3">{m.profiles?.name ?? "—"}</td>
-                <td className="py-3">{m.departments?.name ?? "—"}</td>
-                <td className="py-3 text-xs font-medium uppercase tracking-wide">
-                  {STATUS_LABELS[m.status] ?? m.status}
-                </td>
-                <td className="py-3 text-xs font-medium uppercase tracking-wide">
-                  {m.priority === "urgent" ? <span className="text-accent">{m.priority}</span> : m.priority}
-                </td>
-                <td className="py-3 text-body">
-                  {m.submitted_at ? new Date(m.submitted_at).toLocaleDateString() : "—"}
-                </td>
-              </tr>
-            ))}
-            {results.length === 0 && (
-              <tr>
-                <td colSpan={7} className="py-6 text-center text-muted">
-                  No matches.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+        <div className="rounded-xl border bg-card shadow-sm">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Memo</TableHead>
+                  <TableHead>Author</TableHead>
+                  <TableHead>Department</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Priority</TableHead>
+                  <TableHead className="text-right">Submitted</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {results.map((m) => (
+                  <TableRow key={m.id}>
+                    <TableCell className="max-w-64">
+                      <Link href={`/memos/${m.id}`} className="font-medium hover:underline">
+                        {m.subject}
+                      </Link>
+                      <p className="text-xs text-muted-foreground">{m.memo_number}</p>
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+                      {m.profiles?.name ?? "—"}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+                      {m.departments?.name ?? "—"}
+                    </TableCell>
+                    <TableCell><StatusBadge status={m.status} /></TableCell>
+                    <TableCell><PriorityBadge priority={m.priority} /></TableCell>
+                    <TableCell className="whitespace-nowrap text-right text-sm text-muted-foreground">
+                      {m.submitted_at ? new Date(m.submitted_at).toLocaleDateString() : "—"}
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {results.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
+                      No matches.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
       ) : (
-        <p className="text-sm text-muted">Enter at least one filter to search.</p>
+        <p className="text-sm text-muted-foreground">Enter at least one filter to search.</p>
       )}
-    </main>
+    </div>
   );
 }

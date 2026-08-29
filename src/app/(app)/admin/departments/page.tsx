@@ -1,6 +1,9 @@
 import { requireOrgAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { logQueryError } from "@/lib/log-query-error";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { NewDepartmentForm } from "./new-department-form";
 import { toggleDepartmentStatus } from "./actions";
 
@@ -16,53 +19,55 @@ export default async function DepartmentsPage() {
   logQueryError("admin.departments", departmentsError);
 
   return (
-    <main className="mx-auto max-w-3xl">
-      <h1 className="mb-8 text-3xl headline">departments</h1>
-      <NewDepartmentForm />
-      <table className="w-full border-collapse text-sm">
-        <thead>
-          <tr className="border-b border-ink text-left text-xs uppercase tracking-wide text-muted">
-            <th className="py-2">Name</th>
-            <th className="py-2">Description</th>
-            <th className="py-2">Status</th>
-            <th className="py-2"></th>
-          </tr>
-        </thead>
-        <tbody>
-          {(departments ?? []).map((d) => (
-            <tr key={d.id} className="border-b border-rule">
-              <td className="py-3 font-medium">{d.name}</td>
-              <td className="py-3 text-body">{d.description ?? "—"}</td>
-              <td className="py-3">
-                <span
-                  className={`text-xs font-medium uppercase tracking-wide ${
-                    d.status === "active" ? "text-ink" : "text-muted"
-                  }`}
-                >
-                  {d.status}
-                </span>
-              </td>
-              <td className="py-3 text-right">
-                <form action={toggleDepartmentStatus.bind(null, d.id)}>
-                  <button
-                    type="submit"
-                    className="border border-ink px-3 py-1 text-xs font-medium uppercase tracking-wide"
-                  >
-                    {d.status === "active" ? "deactivate" : "activate"}
-                  </button>
-                </form>
-              </td>
-            </tr>
-          ))}
-          {(departments ?? []).length === 0 && (
-            <tr>
-              <td colSpan={4} className="py-6 text-center text-muted">
-                No departments yet.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-    </main>
+    <div className="mx-auto max-w-3xl">
+      <div className="mb-6">
+        <h1 className="text-2xl font-semibold tracking-tight">Departments</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Manage your organization&apos;s departments.</p>
+      </div>
+
+      <div className="mb-6">
+        <NewDepartmentForm />
+      </div>
+
+      <div className="rounded-xl border bg-card shadow-sm">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Name</TableHead>
+              <TableHead>Description</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="text-right"></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {(departments ?? []).map((d) => (
+              <TableRow key={d.id}>
+                <TableCell className="font-medium">{d.name}</TableCell>
+                <TableCell className="text-sm text-muted-foreground">{d.description ?? "—"}</TableCell>
+                <TableCell>
+                  <Badge variant={d.status === "active" ? "default" : "secondary"} className={d.status === "active" ? "bg-lime/40 text-[#3f5200] hover:bg-lime/40" : ""}>
+                    {d.status}
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-right">
+                  <form action={toggleDepartmentStatus.bind(null, d.id)}>
+                    <Button type="submit" variant="outline" size="sm">
+                      {d.status === "active" ? "Deactivate" : "Activate"}
+                    </Button>
+                  </form>
+                </TableCell>
+              </TableRow>
+            ))}
+            {(departments ?? []).length === 0 && (
+              <TableRow>
+                <TableCell colSpan={4} className="py-10 text-center text-muted-foreground">
+                  No departments yet.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
   );
 }

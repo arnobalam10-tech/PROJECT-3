@@ -2,12 +2,8 @@ import Link from "next/link";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { logQueryError } from "@/lib/log-query-error";
-
-const STATUS_LABELS: Record<string, string> = {
-  approved: "Approved",
-  rejected: "Rejected",
-  cancelled: "Cancelled",
-};
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { StatusBadge, PriorityBadge } from "@/components/memo-badges";
 
 export default async function CompletedPage() {
   await requireProfile();
@@ -39,56 +35,54 @@ export default async function CompletedPage() {
   const rows = (memos ?? []) as unknown as Row[];
 
   return (
-    <main className="mx-auto max-w-5xl">
-      <h1 className="headline mb-8 text-3xl">completed</h1>
-      <table className="w-full border-collapse text-sm">
-        <thead>
-          <tr className="border-b border-ink text-left text-xs uppercase tracking-wide text-muted">
-            <th className="py-2">Number</th>
-            <th className="py-2">Subject</th>
-            <th className="py-2">Author</th>
-            <th className="py-2">Outcome</th>
-            <th className="py-2">Priority</th>
-            <th className="py-2">Completed</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((m) => (
-            <tr key={m.id} className="border-b border-rule">
-              <td className="py-3 font-mono text-xs">{m.memo_number}</td>
-              <td className="py-3">
-                <Link href={`/memos/${m.id}`} className="font-medium underline">
-                  {m.subject}
-                </Link>
-              </td>
-              <td className="py-3">{m.profiles?.name ?? "—"}</td>
-              {/* Terminal states are informational, not actionable — muted
-                  gray per DESIGN.md, never the accent (that's reserved for
-                  what still needs the viewer's action right now). */}
-              <td className="py-3 text-xs font-medium uppercase tracking-wide text-muted">
-                {STATUS_LABELS[m.status] ?? m.status}
-              </td>
-              <td
-                className={`py-3 text-xs font-medium uppercase tracking-wide ${
-                  m.priority === "urgent" ? "text-accent" : ""
-                }`}
-              >
-                {m.priority}
-              </td>
-              <td className="py-3 text-body">
-                {m.completed_at ? new Date(m.completed_at).toLocaleString() : "—"}
-              </td>
-            </tr>
-          ))}
-          {rows.length === 0 && (
-            <tr>
-              <td colSpan={6} className="py-6 text-center text-muted">
-                No completed workflows yet.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-    </main>
+    <div className="mx-auto max-w-6xl">
+      <div className="mb-6">
+        <h1 className="text-2xl font-semibold tracking-tight">Completed</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Memos that have reached a final outcome.</p>
+      </div>
+
+      <div className="rounded-xl border bg-card shadow-sm">
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Memo</TableHead>
+                <TableHead>Author</TableHead>
+                <TableHead>Outcome</TableHead>
+                <TableHead>Priority</TableHead>
+                <TableHead className="text-right">Completed</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map((m) => (
+                <TableRow key={m.id}>
+                  <TableCell className="max-w-64">
+                    <Link href={`/memos/${m.id}`} className="font-medium hover:underline">
+                      {m.subject}
+                    </Link>
+                    <p className="text-xs text-muted-foreground">{m.memo_number}</p>
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+                    {m.profiles?.name ?? "—"}
+                  </TableCell>
+                  <TableCell><StatusBadge status={m.status} /></TableCell>
+                  <TableCell><PriorityBadge priority={m.priority} /></TableCell>
+                  <TableCell className="whitespace-nowrap text-right text-sm text-muted-foreground">
+                    {m.completed_at ? new Date(m.completed_at).toLocaleString() : "—"}
+                  </TableCell>
+                </TableRow>
+              ))}
+              {rows.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
+                    No completed workflows yet.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </div>
+    </div>
   );
 }

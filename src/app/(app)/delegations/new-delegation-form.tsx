@@ -2,8 +2,15 @@
 
 import { useActionState, useRef, useEffect } from "react";
 import { createDelegation } from "./actions";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
 
 type Member = { id: string; name: string };
+
+const selectClasses =
+  "h-9 rounded-lg border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 
 export function NewDelegationForm({ members }: { members: Member[] }) {
   const [state, formAction, pending] = useActionState(createDelegation, { error: null });
@@ -16,47 +23,45 @@ export function NewDelegationForm({ members }: { members: Member[] }) {
   }, [pending, state.error]);
 
   return (
-    <form ref={formRef} action={formAction} className="mb-8 flex flex-col gap-3 border border-ink p-4">
-      <p className="text-sm text-body">
-        Designate another org member to act on your behalf for a date range. Any action they take
-        while it&apos;s their turn will be recorded as acted by them on your behalf — never
-        silently attributed to just one of you.
-      </p>
-      <div className="flex flex-wrap gap-3">
-        <label className="flex flex-1 min-w-[10rem] flex-col gap-1">
-          <span className="text-xs font-medium uppercase tracking-wide text-muted">Delegate to</span>
-          <select name="delegate_user_id" required className="border border-ink bg-surface px-3 py-2 text-sm">
-            <option value="">Choose a person…</option>
-            {members.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium uppercase tracking-wide text-muted">Start date</span>
-          <input type="date" name="start_date" required className="border border-ink px-3 py-2 text-sm" />
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium uppercase tracking-wide text-muted">End date</span>
-          <input type="date" name="end_date" required className="border border-ink px-3 py-2 text-sm" />
-        </label>
-      </div>
-      <label className="flex flex-col gap-1">
-        <span className="text-xs font-medium uppercase tracking-wide text-muted">
-          Reason (optional)
-        </span>
-        <input type="text" name="reason" className="border border-ink px-3 py-2 text-sm" />
-      </label>
-      {state.error && <p className="text-sm text-accent">{state.error}</p>}
-      <button
-        type="submit"
-        disabled={pending}
-        className="self-start bg-ink px-4 py-2 text-sm font-medium text-surface disabled:opacity-50"
-      >
-        {pending ? "creating…" : "create delegation"}
-      </button>
-    </form>
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">New delegation</CardTitle>
+        <CardDescription>
+          Any action your delegate takes will be recorded as taken by them, on your behalf —
+          never attributed to just one of you.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form ref={formRef} action={formAction} className="flex flex-col gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="delegate_user_id">Delegate to</Label>
+              <select id="delegate_user_id" name="delegate_user_id" required className={selectClasses}>
+                <option value="">Choose a person…</option>
+                {members.map((m) => (
+                  <option key={m.id} value={m.id}>{m.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="start_date">Start date</Label>
+              <Input id="start_date" type="date" name="start_date" required />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="end_date">End date</Label>
+              <Input id="end_date" type="date" name="end_date" required />
+            </div>
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="reason">Reason (optional)</Label>
+            <Input id="reason" type="text" name="reason" />
+          </div>
+          {state.error && <p className="text-sm text-destructive">{state.error}</p>}
+          <Button type="submit" disabled={pending} className="self-start">
+            {pending ? "Creating…" : "Create delegation"}
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
   );
 }

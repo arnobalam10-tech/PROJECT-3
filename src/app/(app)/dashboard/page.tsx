@@ -1,18 +1,10 @@
 import Link from "next/link";
+import { Inbox, Send, CheckCircle2, AlertTriangle, Users, Building2, FileText, Clock } from "lucide-react";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { logQueryError } from "@/lib/log-query-error";
-
-const STATUS_LABELS: Record<string, string> = {
-  draft: "Draft",
-  submitted: "Submitted",
-  pending_review: "Pending Review",
-  pending_approval: "Pending Approval",
-  changes_requested: "Changes Requested",
-  rejected: "Rejected",
-  approved: "Approved",
-  cancelled: "Cancelled",
-};
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { STATUS_LABELS } from "@/components/memo-badges";
 
 export default async function DashboardPage() {
   const profile = await requireProfile();
@@ -25,7 +17,6 @@ export default async function DashboardPage() {
     .maybeSingle();
   logQueryError("dashboard.org", orgError);
 
-  // ---- Regular-user data (also visible to admins about themselves) ----
   const [
     { data: inboxSteps, error: inboxStepsError },
     { data: myMemos, error: myMemosError },
@@ -66,7 +57,6 @@ export default async function DashboardPage() {
     myStatusCounts.set(m.status, (myStatusCounts.get(m.status) ?? 0) + 1);
   }
 
-  // ---- Admin-only org-wide data ----
   let adminStats: {
     userCount: number;
     activeUserCount: number;
@@ -120,118 +110,150 @@ export default async function DashboardPage() {
     };
   }
 
-  return (
-    <main className="mx-auto max-w-5xl">
-      <h1 className="mb-1 text-3xl headline">dashboard</h1>
-      <p className="mb-8 text-sm text-body">
-        {profile.name} · {org?.name} · {profile.role === "org_admin" ? "Admin" : "User"}
-      </p>
+  const maxStatusCount = Math.max(1, ...[...myStatusCounts.values()]);
 
-      <h2 className="mb-3 text-xs font-medium uppercase tracking-wide text-muted">Your activity</h2>
-      <div className="mb-10 grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <StatTile label="Awaiting your action" value={inboxCount} href="/inbox" />
-        <StatTile label="Urgent, awaiting you" value={urgentInboxCount} accent href="/inbox?priority=urgent" />
-        <StatTile label="Submitted by you" value={submittedCount} href="/memos" />
-        <StatTile label="Completed (yours)" value={recentlyCompleted.length} href="/completed" />
+  return (
+    <div className="mx-auto max-w-6xl">
+      <div className="mb-8">
+        <h1 className="text-2xl font-semibold tracking-tight">Good to see you, {profile.name.split(" ")[0]}</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {org?.name} · {profile.role === "org_admin" ? "Admin" : "Member"}
+        </p>
       </div>
 
-      <div className="mb-10 grid grid-cols-1 gap-8 sm:grid-cols-2">
-        <div>
-          <h2 className="mb-3 text-xs font-medium uppercase tracking-wide text-muted">
-            Your memos by status
-          </h2>
-          <div className="flex flex-col gap-2.5 border-t-4 border-ink pt-3">
-            {(() => {
-              const entries = [...myStatusCounts.entries()];
-              const max = Math.max(1, ...entries.map(([, c]) => c));
-              return entries.map(([status, count]) => (
-                <div key={status} className="flex items-center gap-3 text-sm">
-                  <span className="w-32 shrink-0 truncate">{STATUS_LABELS[status] ?? status}</span>
-                  <div className="h-3 flex-1 bg-rule/40">
-                    <div className="h-3 bg-ink" style={{ width: `${(count / max) * 100}%` }} />
-                  </div>
-                  <span className="w-6 shrink-0 text-right font-medium">{count}</span>
-                </div>
-              ));
-            })()}
-            {myStatusCounts.size === 0 && <p className="text-sm text-muted">No memos yet.</p>}
-          </div>
-        </div>
+      <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard label="Awaiting your action" value={inboxCount} icon={Inbox} href="/inbox" />
+        <StatCard
+          label="Urgent, awaiting you"
+          value={urgentInboxCount}
+          icon={AlertTriangle}
+          tone="warn"
+          href="/inbox?priority=urgent"
+        />
+        <StatCard label="Submitted by you" value={submittedCount} icon={Send} href="/memos" />
+        <StatCard label="Completed (yours)" value={recentlyCompleted.length} icon={CheckCircle2} href="/completed" />
+      </div>
 
-        <div>
-          <h2 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">
-            Recent activity (your notifications)
-          </h2>
-          <ul className="flex flex-col gap-2 text-sm">
+      <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Your memos by status</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            {[...myStatusCounts.entries()].map(([status, count]) => (
+              <div key={status} className="flex items-center gap-3 text-sm">
+                <span className="w-32 shrink-0 truncate text-muted-foreground">
+                  {STATUS_LABELS[status] ?? status}
+                </span>
+                <div className="h-2.5 flex-1 rounded-full bg-secondary">
+                  <div
+                    className="h-2.5 rounded-full bg-primary"
+                    style={{ width: `${(count / maxStatusCount) * 100}%` }}
+                  />
+                </div>
+                <span className="w-6 shrink-0 text-right font-medium">{count}</span>
+              </div>
+            ))}
+            {myStatusCounts.size === 0 && <p className="text-sm text-muted-foreground">No memos yet.</p>}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Recent activity</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col divide-y">
             {(recentNotifs ?? []).map((n) => (
-              <li key={n.id} className="border-b border-rule py-2">
+              <div key={n.id} className="py-2.5 first:pt-0 last:pb-0">
                 {n.memo_id ? (
-                  <Link href={`/memos/${n.memo_id}`} className="underline">
+                  <Link href={`/memos/${n.memo_id}`} className="text-sm hover:underline">
                     {n.message}
                   </Link>
                 ) : (
-                  n.message
+                  <p className="text-sm">{n.message}</p>
                 )}
-                <p className="text-xs text-muted">{new Date(n.created_at).toLocaleString()}</p>
-              </li>
+                <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+                  <Clock className="h-3 w-3" />
+                  {new Date(n.created_at).toLocaleString()}
+                </p>
+              </div>
             ))}
-            {(recentNotifs ?? []).length === 0 && <li className="text-muted">Nothing yet.</li>}
-          </ul>
-        </div>
+            {(recentNotifs ?? []).length === 0 && <p className="text-sm text-muted-foreground">Nothing yet.</p>}
+          </CardContent>
+        </Card>
       </div>
 
       {adminStats && (
         <>
-          <h2 className="mb-3 text-xs font-medium uppercase tracking-wide text-muted">
-            Organization (admin)
-          </h2>
-          <div className="mb-10 grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <StatTile label="Users" value={adminStats.userCount} href="/admin/users" />
-            <StatTile label="Active users" value={adminStats.activeUserCount} href="/admin/users" />
-            <StatTile label="Departments" value={adminStats.departmentCount} href="/admin/departments" />
-            <StatTile label="Total memos" value={adminStats.memoCount} href="/admin/reports" />
-            <StatTile label="Pending workflows" value={adminStats.pendingCount} href="/admin/reports" />
-            <StatTile label="Completed" value={adminStats.completedCount} href="/completed" />
-            <StatTile label="Rejected" value={adminStats.rejectedCount} href="/admin/reports" />
+          <h2 className="mb-3 text-sm font-medium text-muted-foreground">Organization</h2>
+          <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <StatCard label="Users" value={adminStats.userCount} icon={Users} href="/admin/users" />
+            <StatCard label="Active users" value={adminStats.activeUserCount} icon={Users} href="/admin/users" />
+            <StatCard label="Departments" value={adminStats.departmentCount} icon={Building2} href="/admin/departments" />
+            <StatCard label="Total memos" value={adminStats.memoCount} icon={FileText} href="/admin/reports" />
+            <StatCard label="Pending workflows" value={adminStats.pendingCount} icon={Clock} href="/admin/reports" />
+            <StatCard label="Completed" value={adminStats.completedCount} icon={CheckCircle2} href="/completed" />
+            <StatCard label="Rejected" value={adminStats.rejectedCount} icon={AlertTriangle} href="/admin/reports" />
           </div>
 
-          <div>
-            <h2 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">
-              Recent system activity
-            </h2>
-            <ul className="flex flex-col gap-2 text-sm">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Recent system activity</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col divide-y">
               {adminStats.recentActivity.map((a, i) => (
-                <li key={i} className="border-b border-rule py-2">
-                  <span className="text-xs font-medium uppercase tracking-wide text-muted">
-                    {a.event_type}
-                  </span>{" "}
-                  · {a.description}
-                  <p className="text-xs text-muted">{new Date(a.created_at).toLocaleString()}</p>
-                </li>
+                <div key={i} className="py-2.5 first:pt-0 last:pb-0">
+                  <p className="text-sm">
+                    <span className="font-medium capitalize">{a.event_type.replace(/_/g, " ")}</span>
+                    {a.description ? ` — ${a.description}` : ""}
+                  </p>
+                  <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+                    <Clock className="h-3 w-3" />
+                    {new Date(a.created_at).toLocaleString()}
+                  </p>
+                </div>
               ))}
-              {adminStats.recentActivity.length === 0 && <li className="text-muted">Nothing yet.</li>}
-            </ul>
-          </div>
+              {adminStats.recentActivity.length === 0 && (
+                <p className="text-sm text-muted-foreground">Nothing yet.</p>
+              )}
+            </CardContent>
+          </Card>
         </>
       )}
-    </main>
+    </div>
   );
 }
 
-function StatTile({ label, value, accent, href }: { label: string; value: number; accent?: boolean; href: string }) {
+function StatCard({
+  label,
+  value,
+  icon: Icon,
+  tone,
+  href,
+}: {
+  label: string;
+  value: number;
+  icon: React.ComponentType<{ className?: string }>;
+  tone?: "warn";
+  href: string;
+}) {
   return (
-    <Link
-      href={href}
-      className="group block border border-ink bg-surface p-4 transition-colors hover:bg-ink"
-    >
-      <p className="text-xs font-medium uppercase tracking-wide text-muted group-hover:text-surface/70">
-        {label}
-      </p>
-      <p
-        className={`mt-1 text-3xl font-bold group-hover:text-surface ${accent ? "text-accent" : ""}`}
-      >
-        {value.toLocaleString()}
-      </p>
+    <Link href={href}>
+      <Card className="transition-shadow hover:shadow-md">
+        <CardContent className="flex items-start justify-between">
+          <div className="min-w-0">
+            <p className="truncate text-sm text-muted-foreground">{label}</p>
+            <p className="mt-1 text-2xl font-semibold">{value.toLocaleString()}</p>
+          </div>
+          <div
+            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
+              tone === "warn" ? "bg-rose-100 text-rose-700" : "bg-primary/10 text-primary"
+            }`}
+          >
+            <Icon className="h-4 w-4" />
+          </div>
+        </CardContent>
+      </Card>
     </Link>
   );
 }

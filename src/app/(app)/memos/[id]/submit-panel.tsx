@@ -1,11 +1,19 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { X } from "lucide-react";
 import { submitMemo } from "./workflow-actions";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { initials } from "@/components/memo-badges";
 
 type Member = { id: string; name: string };
 type TemplatePosition = { id: string; position_order: number; position_label: string };
 type Template = { id: string; name: string; positions: TemplatePosition[] };
+
+const selectClasses =
+  "h-9 rounded-lg border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 
 export function SubmitPanel({
   memoId,
@@ -21,10 +29,6 @@ export function SubmitPanel({
   const [pick, setPick] = useState("");
   const [templateId, setTemplateId] = useState("");
   const [templateAssignments, setTemplateAssignments] = useState<Record<string, string>>({});
-  // Tracks which template the current chain was built from, so the RPC can
-  // record memos.workflow_template_id (PRD §18). Cleared on any manual
-  // add/remove afterward — once the chain no longer matches the template
-  // exactly, it's a custom chain again, not "built from this template".
   const [usedTemplateId, setUsedTemplateId] = useState<string | null>(null);
 
   const available = members.filter((m) => !chain.some((c) => c.id === m.id));
@@ -65,124 +69,114 @@ export function SubmitPanel({
     !!selectedTemplate && selectedTemplate.positions.every((p) => !!templateAssignments[p.id]);
 
   return (
-    <section className="mt-10 border border-ink p-4">
-      <h2 className="mb-3 text-xs font-medium uppercase tracking-wide text-muted">
-        Submit for approval
-      </h2>
-      <p className="mb-4 text-sm text-body">
-        Choose an ordered chain of participants. This is a starting point — whoever holds the
-        memo can still forward it to someone new, reroute it, or adjust who comes next.
-      </p>
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Submit for approval</CardTitle>
+        <CardDescription>
+          Choose an ordered chain of participants. This is a starting point — whoever holds the
+          memo can still forward it to someone new, reroute it, or adjust who comes next.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        {templates.length > 0 && (
+          <div className="rounded-lg border bg-muted/40 p-3">
+            <p className="mb-2 text-xs font-medium text-muted-foreground">
+              Start from a template — optional, replaces the chain below once applied
+            </p>
+            <select
+              value={templateId}
+              onChange={(e) => pickTemplate(e.target.value)}
+              className={`mb-2 w-full ${selectClasses}`}
+            >
+              <option value="">Choose a template…</option>
+              {templates.map((t) => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </select>
+            {selectedTemplate && (
+              <div className="flex flex-col gap-2">
+                {selectedTemplate.positions.map((p) => (
+                  <label key={p.id} className="flex items-center gap-2 text-sm">
+                    <span className="w-32 shrink-0 text-xs text-muted-foreground">{p.position_label}</span>
+                    <select
+                      value={templateAssignments[p.id] ?? ""}
+                      onChange={(e) => setTemplateAssignments((a) => ({ ...a, [p.id]: e.target.value }))}
+                      className={`flex-1 ${selectClasses}`}
+                    >
+                      <option value="">Assign a person…</option>
+                      {members.map((m) => (
+                        <option key={m.id} value={m.id}>{m.name}</option>
+                      ))}
+                    </select>
+                  </label>
+                ))}
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={applyTemplate}
+                  disabled={!allPositionsAssigned}
+                  className="mt-1 self-start"
+                >
+                  Apply template
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
 
-      {templates.length > 0 && (
-        <div className="mb-4 border border-rule p-3">
-          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">
-            Start from a template (PRD §18) — optional, replaces the chain below once applied
-          </p>
+        <ol className="flex flex-col gap-2">
+          {chain.map((m, i) => (
+            <li key={m.id} className="flex items-center justify-between gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-sm">
+              <div className="flex min-w-0 items-center gap-2.5">
+                <span className="text-xs font-medium text-muted-foreground">{i + 1}.</span>
+                <Avatar className="h-6 w-6 shrink-0">
+                  <AvatarFallback className="text-[10px]">{initials(m.name)}</AvatarFallback>
+                </Avatar>
+                <span className="truncate">{m.name}</span>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => removeFromChain(m.id)}
+                aria-label={`Remove ${m.name}`}
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </li>
+          ))}
+          {chain.length === 0 && <li className="text-sm text-muted-foreground">No participants added yet.</li>}
+        </ol>
+
+        <div className="flex gap-2">
           <select
-            value={templateId}
-            onChange={(e) => pickTemplate(e.target.value)}
-            className="mb-2 w-full border border-ink bg-surface px-3 py-2 text-sm"
+            value={pick}
+            onChange={(e) => setPick(e.target.value)}
+            className={`flex-1 ${selectClasses}`}
           >
-            <option value="">Choose a template…</option>
-            {templates.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
+            <option value="">Add a participant…</option>
+            {available.map((m) => (
+              <option key={m.id} value={m.id}>{m.name}</option>
             ))}
           </select>
-          {selectedTemplate && (
-            <div className="flex flex-col gap-2">
-              {selectedTemplate.positions.map((p) => (
-                <label key={p.id} className="flex items-center gap-2 text-sm">
-                  <span className="w-32 shrink-0 text-xs uppercase tracking-wide text-muted">
-                    {p.position_label}
-                  </span>
-                  <select
-                    value={templateAssignments[p.id] ?? ""}
-                    onChange={(e) =>
-                      setTemplateAssignments((a) => ({ ...a, [p.id]: e.target.value }))
-                    }
-                    className="flex-1 border border-ink bg-surface px-3 py-2"
-                  >
-                    <option value="">Assign a person…</option>
-                    {members.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ))}
-              <button
-                type="button"
-                onClick={applyTemplate}
-                disabled={!allPositionsAssigned}
-                className="mt-1 self-start border border-ink px-3 py-1.5 text-xs font-medium uppercase tracking-wide disabled:opacity-50"
-              >
-                apply template
-              </button>
-            </div>
-          )}
+          <Button type="button" variant="outline" onClick={addToChain} disabled={!pick}>
+            Add
+          </Button>
         </div>
-      )}
 
-      <ol className="mb-4 flex flex-col gap-2">
-        {chain.map((m, i) => (
-          <li key={m.id} className="flex items-center justify-between border border-ink px-3 py-2 text-sm">
-            <span>
-              {i + 1}. {m.name}
-            </span>
-            <button
-              type="button"
-              onClick={() => removeFromChain(m.id)}
-              className="text-xs font-medium uppercase tracking-wide text-accent underline"
-            >
-              remove
-            </button>
-          </li>
-        ))}
-        {chain.length === 0 && <li className="text-sm text-muted">No participants added yet.</li>}
-      </ol>
-
-      <div className="mb-4 flex gap-2">
-        <select
-          value={pick}
-          onChange={(e) => setPick(e.target.value)}
-          className="flex-1 border border-ink bg-surface px-3 py-2 text-sm"
-        >
-          <option value="">Add a participant…</option>
-          {available.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.name}
-            </option>
+        <form action={formAction}>
+          <input type="hidden" name="memo_id" value={memoId} />
+          {usedTemplateId && <input type="hidden" name="workflow_template_id" value={usedTemplateId} />}
+          {chain.map((m) => (
+            <input key={m.id} type="hidden" name="participant_id" value={m.id} />
           ))}
-        </select>
-        <button
-          type="button"
-          onClick={addToChain}
-          disabled={!pick}
-          className="border border-ink px-3 py-2 text-sm font-medium disabled:opacity-50"
-        >
-          add
-        </button>
-      </div>
-
-      <form action={formAction}>
-        <input type="hidden" name="memo_id" value={memoId} />
-        {usedTemplateId && <input type="hidden" name="workflow_template_id" value={usedTemplateId} />}
-        {chain.map((m) => (
-          <input key={m.id} type="hidden" name="participant_id" value={m.id} />
-        ))}
-        {state.error && <p className="mb-3 text-sm text-accent">{state.error}</p>}
-        <button
-          type="submit"
-          disabled={pending || chain.length === 0}
-          className="bg-ink px-4 py-2 text-sm font-medium text-surface disabled:opacity-50"
-        >
-          {pending ? "submitting…" : "submit memo"}
-        </button>
-      </form>
-    </section>
+          {state.error && <p className="mb-3 text-sm text-destructive">{state.error}</p>}
+          <Button type="submit" disabled={pending || chain.length === 0}>
+            {pending ? "Submitting…" : "Submit memo"}
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
   );
 }

@@ -4,17 +4,24 @@
 rules. It is the source of truth for "what's the current state of the project" — more reliable
 than memory of prior sessions. Be precise and honest; "mostly done" is not an acceptable status.
 
-Last updated: 2026-08-29 (Phase 10 session)
+Last updated: 2026-08-29 (Phase 10 v2 session)
 Updated by: Claude Code
 
 ---
 
 ## Current Phase
 
-Phase 10 (Design pass — Swiss/Basel system per `DESIGN.md`) — done, **pending the user's own visual
-review of the live Vercel deploy before Phase 11**, per their explicit request for this phase
-specifically (not just a status report). See "Phase 10" section below for the page-by-page
-done/rough breakdown they asked for.
+**Phase 10 was redone under a new design direction (v2) after the original Swiss/Basel pass
+didn't land with the user.** `DESIGN.md` was completely rewritten to a modern SaaS dashboard
+aesthetic (white/black/violet `#7E3BED`/lime `#C6FF34`, rounded corners, soft shadows, colored
+status pills — direct inversions of several Swiss rules). The entire "Phase 10" section below,
+including its "fully done vs. rough" breakdown, describes the **abandoned Swiss/Basel system**
+and is kept only as a historical record of that earlier pass — **do not use it as current design
+guidance.** See "**Phase 10 (v2) — Design direction change**" below for the current system and
+this round's actual done/rough breakdown, which supersedes it. Status: v2 pass done and
+self-QA'd across every page at both a narrow-mobile and the default pane width, zero
+overlap/clipping bugs left open, **pending the user's own visual review of the live Vercel deploy
+before Phase 11**, same as the original request for this phase.
 
 ## Done ✅
 
@@ -946,6 +953,173 @@ accent-usage rule are all fully correct; only the literal typeface differs from 
   confidence is reasonably high without a dedicated mobile pass, but this wasn't independently
   re-verified at 375px specifically.
 
+## Phase 10 (v2) — Design direction change: modern SaaS dashboard (supersedes Phase 10 above)
+
+**Why:** the user reviewed the live Swiss/Basel deploy themselves (per their own explicit request
+for that phase) and decided it hadn't landed. Rather than iterate on it, they rewrote `DESIGN.md`
+to a different aesthetic entirely and asked for a full redo — same page scope as before, priority
+on the landing page.
+
+**New system**: white `#FFFFFF` / black `#000000` background+ink, violet `#7E3BED` as the single
+primary accent, lime `#C6FF34` as a sparing secondary accent. Rounded corners and soft shadows are
+now correct (inverting the old square-corner/no-shadow rule); colored status pill badges are now
+correct (inverting the old uppercase-tracked-label rule). Every Swiss-palette hex value (`#111111`
+ink, `#F4F1EA` background, `#E32213` accent-red, etc.) was removed, not left dormant alongside the
+new tokens.
+
+**Tooling, per the user's explicit instruction**: shadcn/ui as the component library, installed
+directly via npm (no MCP server). `npx shadcn@latest init` on this Next.js 16 / Tailwind v4 setup
+resolved to **Base UI** (`@base-ui/react`) primitives under the hood, not Radix — a meaningfully
+different composition API (no `asChild`; a `render` prop instead, and most primitives enforce
+their own semantics rather than being a transparent pass-through). This distinction drove most of
+the real bugs found this round (below). The user's other suggested sources (the frontend-design
+skill, Vercel's `agent-skills` repo for Next.js patterns) were consulted for component/layout
+patterns; the remaining unverified third-party repos on the user's list were deliberately not
+pulled in, per their own instruction not to take on that risk this close to the deadline.
+
+**Rebuilt across every page in the same scope as the original Phase 10 pass**: landing, login,
+signup, dashboard, inbox, my memos, completed, memo creation, memo detail/timeline, workflow
+actions, notifications, search, profile, delegations, and all 5 admin pages (users, departments,
+templates, reports, audit log). Landing page rebuilt to spec: a hero with the headline "Memos that
+route themselves through your org — not a fixed chain of command.", a real dashboard mockup built
+from actual app components/colors (`src/app/dashboard-mockup.tsx`, inside a browser-chrome frame
+component `src/app/browser-frame.tsx` — not a stock graphic), a 3-step "how it works" diagram
+reusing the PRD's own Employee → Dept Head → Finance → Director chain, 4 feature callouts, and a
+second mockup (`src/app/memo-detail-mockup.tsx`) showing a memo awaiting one person's decision
+day-to-day.
+
+**Four real bugs found by looking at rendered screenshots, not by reasoning about classes** (per
+the user's hard "no overlapping/clipped elements, verified visually" requirement) — all in the two
+custom landing-page mockups, all at mobile width (375px):
+1. Dashboard mockup's 3-column stat-tile grid was too cramped at mobile width, truncating labels.
+   Fixed: shorter labels + `grid-cols-2 min-[420px]:grid-cols-3` with the first tile spanning 2
+   columns below that breakpoint.
+2. Dashboard mockup's status badges were being silently clipped off-frame — confirmed as real DOM
+   clipping (not just a cropped screenshot) via a `document.body.scrollWidth === window.innerWidth`
+   check, which ruled out page-level scroll and pointed at the `BrowserFrame`'s own
+   `overflow-hidden` eating content instead. Root cause: a classic flex `min-width: auto` gotcha —
+   a missing `min-w-0` on the mockup's `flex-1` content wrapper. Fixed by adding it.
+3. Memo-detail mockup's avatar initials were invisible for the "current" (violet) avatar state —
+   shadcn's `AvatarFallback` bakes in its own `text-muted-foreground` class, which a parent's color
+   utility does not override (a CSS specificity/ownership gotcha, not a Tailwind bug). Fixed with
+   an explicit text-color class applied directly on each `AvatarFallback`.
+4. Memo-detail mockup's metadata line wrapped awkwardly next to a badge at mobile width — missing
+   `truncate` (present on the adjacent subject line but not this one). Fixed.
+
+**A real functional regression introduced mid-rebuild, caught by live-testing the actual filter
+interaction, not just by looking at it**: `/inbox`'s priority/department filters were first
+rebuilt with raw shadcn `Select` components inside a plain `<form action="/inbox">` with no submit
+button and no auto-submit wiring — Base UI's `Select` renders a hidden native input for form
+compatibility, but nothing actually submits the form on a selection change, so the filter UI
+looked right and did nothing. Caught by testing the actual dropdown interaction live in the
+browser and checking the resulting URL. Fixed by building `src/components/select-filter.tsx`
+(`SelectFilter` — a small client component that reads the current filter value from
+`useSearchParams()` and does a `router.push()` with the updated query string on change), then
+re-verified live: selecting "Normal" priority correctly updated the URL and filtered the sole
+urgent memo out of the inbox list. **Deliberately not converted everywhere** — other filter forms
+(search, admin/reports, admin/audit-log, delegations' delegate picker, memo submit/action-panel
+selects) were kept as native `<select>` elements, restyled visually only, specifically to avoid
+re-introducing this exact submission-mechanism risk across many more forms under deadline pressure
+— a scope decision, not an oversight.
+
+**A second, quieter class of bug found only after a dev-server-cache scare turned out to be a red
+herring**: two consecutive live-browser click attempts (testing the mobile sidebar toggle) timed
+out, and `preview_logs` showed a hydration mismatch in `user-menu.tsx` and a `ReferenceError:
+Select is not defined` in `inbox/page.tsx` — both showing *old*, already-fixed code in their stack
+traces. Investigated rather than assumed away: a full clean rebuild (`next build`, 21/21 routes)
+passed with zero errors, and re-reading both files on disk confirmed they already had the correct
+code. Restarting the dev server (`.next` cache cleared) and reloading in a **fresh browser tab**
+(the running tab's console-message buffer was found to accumulate across the whole tab's
+lifetime rather than resetting per navigation — confirmed by comparing an old tab's error list
+against a brand-new tab on the identical page, which showed zero errors) resolved the apparent
+contradiction: those were stale log entries from earlier in the session, not a live bug. Genuinely
+new errors that turned up *after* this reset were real and are documented below, not dismissed the
+same way.
+
+**Real bugs the reset uncovered (not stale)**: Base UI's `Button` primitive defaults
+`nativeButton={true}` and its own docs explicitly say links should never be composed through
+`Button`'s `render` prop (`"Links (<a>) have their own semantics and should not be rendered as
+buttons through the render prop... style the <a> element directly with CSS rather than using the
+Button component"`) — every `<Button render={<Link .../>}>` / `<Button render={<a .../>}>`
+combination on the landing page, `notification-bell.tsx`, `memos/page.tsx`'s "New memo" button,
+and the memo detail page's "Export" link logged this warning live. Fixed by converting all of
+them (7 call sites total) to a direct `<Link className={buttonVariants({...})}>` /
+`<a className={buttonVariants({...})}>` pattern instead — `buttonVariants` (the `cva` export
+already sitting alongside `Button` in `src/components/ui/button.tsx`) gives the exact same visual
+styling with no wrapper component. Confirmed the remaining `render={<Link/>}` usages elsewhere
+(`app-sidebar.tsx`'s `SidebarMenuButton`, `user-menu.tsx`'s `DropdownMenuItem`) are safe — neither
+wraps Base UI's `Button` primitive (`SidebarMenuButton` uses the generic `useRender` hook with
+`defaultTagName: "button"`; `DropdownMenuItem` uses `MenuPrimitive.Item`, which has no
+`nativeButton` concept at all) — verified by reading their source, not assumed. Re-ran a full
+`next build` + `npx eslint .` after the fix: both clean. Re-verified live in a fresh tab across
+every page: zero console errors anywhere in the app.
+
+**Full visual QA sweep, done page by page in the live browser per the user's hard requirement**
+(screenshots, not class-reasoning), at both true mobile width (375px, via `resize_window`) and the
+browser pane's own default width (~400–800px, which the pane renders at in this environment):
+dashboard, inbox, my memos, completed, memo creation, memo detail (scrolled through header →
+body → attachments → action panel → workflow timeline → comments), notifications, search,
+profile, delegations, login, signup, and all 5 admin pages (users, departments, templates,
+reports, audit log) — all clean, no overlapping or clipped elements found beyond the 4 landing-page
+mockup bugs and the 1 nav-overflow bug below, all already fixed above.
+
+**One more overflow bug found and fixed at an unusually narrow width (~322px, below the standard
+375px mobile breakpoint but still a real small-phone width)**: the landing page's top nav
+(`Relay` wordmark + "Sign in" + "Create your organization") didn't wrap or shrink, causing a
+site-wide horizontal scrollbar and a clipped CTA button label at that width. Confirmed this did
+*not* reproduce at the standard 375px mobile preset (no overflow there) — this is a real edge case
+for very small/older phones, not a broadly-hit bug — but since it was actually tested and broke,
+it was fixed rather than left as a known gap: the nav CTA now shows "Sign up" below the `sm:`
+breakpoint (full "Create your organization" at `sm:` and up), both nav buttons dropped to `size:
+"sm"`, and the header's horizontal padding tightens at the smallest breakpoint. Re-verified at
+exactly 322px afterward: `document.body.scrollWidth === window.innerWidth`, no overflow, full
+landing page scrolled top-to-bottom with all four sections (hero, how-it-works, feature grid,
+second mockup, closing CTA, footer) checked individually — all clean.
+
+**Page-by-page breakdown, as explicitly requested — fully redone and live-verified vs. still
+rough, this round:**
+
+*Fully redone and visually verified live (screenshots, not just token compilation), both at true
+mobile width and the pane's default width:*
+- **Landing page** — hero, both custom mockups (dashboard + memo detail), how-it-works diagram,
+  feature grid, closing CTA, footer. All 4 mockup bugs and the nav-overflow bug above are fixed
+  and re-verified.
+- **Dashboard** (regular-user and admin variants — checked signed in as both a regular user and an
+  org admin).
+- **Inbox** — including the now-functional `SelectFilter` priority/department filters, verified
+  live (URL updates + list filters correctly on selection).
+- **My Memos, Completed** — including the "New memo" button fix.
+- **Memo creation** (`/memos/new`) — full form, Tiptap toolbar.
+- **Memo detail / timeline / workflow actions** — header, body, attachments, action panel,
+  workflow section, chronological timeline, comment box; including the "Export" button fix.
+- **Notifications, Search, Profile, Delegations** — forms, empty states, and (for Search) the
+  results table.
+- **Login, Signup**.
+- **Admin: Users, Departments, Templates, Reports, Audit Log** — all 5, including Reports' stat
+  tiles + breakdown bars and Audit Log's filter form.
+
+*Not independently re-screenshotted this round* — none; every page in the requested scope was
+checked live this pass (unlike the original Swiss/Basel pass, which left 7 pages as "swept but not
+re-looked-at").
+
+*Known rough edges, disclosed rather than left implicit:*
+- No page-specific issues remain open. The one general caveat: this session's mobile-width testing
+  used the browser pane's `resize_window` emulation (375px preset, plus one narrower 322px check),
+  not a real physical device — standard, low-risk for a Tailwind-driven layout, but not literally
+  the same as an on-device check.
+- The Next.js dev-tools indicator (the floating "N" badge, bottom-left, dev-mode only) visually
+  overlaps some page content at mobile width in a few places (e.g. partially over "Post comment"
+  on the memo detail page, over "None yet" on Delegations). This is **Next.js's own dev-only
+  overlay, not app UI** — confirmed absent from the production build — so not a `DESIGN.md`
+  violation and not fixed.
+
+**Test data**: this round's QA was done against the "Modern SaaS Demo Org" throwaway org (3 users,
+2 departments, 4 memos) that existed at the start of this session. Two of its users'
+`auth.users.encrypted_password` were temporarily reset (via direct SQL) to a known value purely to
+sign in for QA — no other data was changed. **The entire org, its users, and all related rows were
+deleted via SQL immediately after QA completed**, confirmed via a follow-up `count(*)` query
+returning 0, per this project's standing discipline of never leaving test artifacts behind.
+
 ## In Progress 🚧
 
 - **Verify domain at resend.com/domains and update `RESEND_FROM_EMAIL`** before the demo/grading
@@ -1048,9 +1222,11 @@ deleted immediately after the run; both test scripts were deleted, not committed
 - [x] ~~Phase 8 — Templates, delegation, versioning, audit log~~ **Done** — see Phase 8 section
       above, including a self-caught-and-fixed regression documented in full.
 - [x] ~~Phase 9 — PDF export~~ **Done** — see Phase 9 section above.
-- [x] ~~Phase 10 — Design pass~~ **Done, pending the user's own visual review of the live deploy**
-      (their explicit request for this phase specifically) — see Phase 10 section above for the
-      full done/rough breakdown, including the landing page rebuild flagged since Phase 2.
+- [x] ~~Phase 10 — Design pass~~ **Done (v2), pending the user's own visual review of the live
+      deploy** (their explicit request for this phase specifically). The original Swiss/Basel pass
+      (see "Phase 10" section) was superseded by a full redo under a new modern-SaaS `DESIGN.md`
+      after the user reviewed it live and decided it hadn't landed — see "**Phase 10 (v2)**"
+      section for the current system and this round's done/rough breakdown.
 - [ ] Phase 11 — Seed data + full demo scenario walkthrough
 - [ ] Phase 12 — Security review pass — **now has a specific known item queued**: the
       `profiles_update_self` RLS policy (migration 001) lacks a `with check` restricting which
@@ -1150,7 +1326,26 @@ if needed. New entries below.)*
   native browser dialog — both for design-system consistency and because it's the only pattern
   browser-automation testing (used throughout this project's verification) can actually exercise.
 
+- **Design direction changed mid-project (Phase 10 → Phase 10 v2), on the user's explicit
+  instruction, not a judgment call.** The user reviewed the deployed Swiss/Basel pass themselves
+  and rewrote `DESIGN.md` to a different system rather than iterate on the old one. Treated as a
+  full redo rather than a patch: the old palette/tokens were removed outright (not left dormant
+  alongside the new ones) to avoid the two systems blending, per the user's explicit warning.
+- **shadcn/ui's Next.js 16 + Tailwind v4 init resolves to Base UI (`@base-ui/react`), not Radix.**
+  Worth recording since it's a non-obvious dependency-of-a-dependency choice made by the `shadcn`
+  CLI itself, not by this session, and it changes the correct composition pattern app-wide (`render`
+  prop instead of `asChild`; several primitives — notably `Button` — enforce their own semantics
+  rather than being a transparent pass-through, which is what drove the "don't put a `Link`/`<a>`
+  inside `Button`'s `render` prop" bug class this round). Anyone touching UI components later
+  should assume Base UI's docs/API, not Radix's.
+
 ## Environment / Infra Notes
+
+**New dependencies this session (Phase 10 v2)**: `@base-ui/react`, `shadcn`, `class-variance-authority`,
+`clsx`, `tailwind-merge`, `lucide-react`, `tw-animate-css` — all from `npx shadcn@latest init`/`add`,
+per the user's explicit instruction to use shadcn/ui as the component library. No backend/schema
+dependency changed.
+
 
 - Supabase project: `nsu-memo-system`, ref `gzevdosekfffippelxmi`, region `ap-northeast-1`, free
   tier, ACTIVE_HEALTHY.

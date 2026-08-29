@@ -4,8 +4,15 @@ import { useActionState, useState } from "react";
 import { useRouter } from "next/navigation";
 import { RichTextEditor } from "@/components/rich-text-editor";
 import { createDraft, updateDraft, type MemoFormState } from "./actions";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
 
 type Option = { id: string; name: string };
+
+const selectClasses =
+  "h-9 rounded-lg border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 
 export function MemoForm({
   mode,
@@ -34,98 +41,67 @@ export function MemoForm({
   const [body, setBody] = useState<Record<string, unknown>>(memo?.body ?? {});
 
   return (
-    <form
-      action={formAction}
-      onSubmit={() => {
-        if (mode === "edit") {
-          // give the success path a moment then refresh server data
-          setTimeout(() => router.refresh(), 300);
-        }
-      }}
-      className="flex flex-col gap-4"
-    >
-      <input type="hidden" name="body" value={JSON.stringify(body)} />
-
-      <label className="flex flex-col gap-1">
-        <span className="text-xs font-medium uppercase tracking-wide text-muted">
-          Subject
-        </span>
-        <input
-          type="text"
-          name="subject"
-          required
-          defaultValue={memo?.subject}
-          className="border border-ink px-3 py-2 outline-none focus:outline-2 focus:outline-ink"
-        />
-      </label>
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium uppercase tracking-wide text-muted">
-            Department
-          </span>
-          <select
-            name="department_id"
-            defaultValue={memo?.department_id ?? ""}
-            className="border border-ink bg-surface px-3 py-2"
-          >
-            <option value="">—</option>
-            {departments.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium uppercase tracking-wide text-muted">
-            Category
-          </span>
-          <select
-            name="category_id"
-            defaultValue={memo?.category_id ?? ""}
-            className="border border-ink bg-surface px-3 py-2"
-          >
-            <option value="">—</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium uppercase tracking-wide text-muted">
-            Priority
-          </span>
-          <select
-            name="priority"
-            defaultValue={memo?.priority ?? "normal"}
-            className="border border-ink bg-surface px-3 py-2"
-          >
-            <option value="normal">Normal</option>
-            <option value="high">High</option>
-            <option value="urgent">Urgent</option>
-          </select>
-        </label>
-      </div>
-
-      <div className="flex flex-col gap-1">
-        <span className="text-xs font-medium uppercase tracking-wide text-muted">Body</span>
-        <RichTextEditor content={body} onChange={setBody} />
-      </div>
-
-      {state.error && <p className="text-sm text-accent">{state.error}</p>}
-
-      <div>
-        <button
-          type="submit"
-          disabled={pending}
-          className="bg-ink px-4 py-2 font-medium text-surface disabled:opacity-50"
+    <Card className="mb-6">
+      <CardContent>
+        <form
+          action={formAction}
+          onSubmit={() => {
+            if (mode === "edit") {
+              setTimeout(() => router.refresh(), 300);
+            }
+          }}
+          className="flex flex-col gap-4"
         >
-          {pending ? "saving…" : mode === "create" ? "create draft" : "save draft"}
-        </button>
-      </div>
-    </form>
+          <input type="hidden" name="body" value={JSON.stringify(body)} />
+
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="subject">Subject</Label>
+            <Input id="subject" type="text" name="subject" required defaultValue={memo?.subject} />
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="department_id">Department</Label>
+              <select id="department_id" name="department_id" defaultValue={memo?.department_id ?? ""} className={selectClasses}>
+                <option value="">—</option>
+                {departments.map((d) => (
+                  <option key={d.id} value={d.id}>{d.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="category_id">Category</Label>
+              <select id="category_id" name="category_id" defaultValue={memo?.category_id ?? ""} className={selectClasses}>
+                <option value="">—</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="priority">Priority</Label>
+              <select id="priority" name="priority" defaultValue={memo?.priority ?? "normal"} className={selectClasses}>
+                <option value="normal">Normal</option>
+                <option value="high">High</option>
+                <option value="urgent">Urgent</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <Label>Body</Label>
+            <RichTextEditor content={body} onChange={setBody} />
+          </div>
+
+          {state.error && <p className="text-sm text-destructive">{state.error}</p>}
+
+          <div>
+            <Button type="submit" disabled={pending}>
+              {pending ? "Saving…" : mode === "create" ? "Create draft" : "Save draft"}
+            </Button>
+          </div>
+        </form>
+      </CardContent>
+    </Card>
   );
 }

@@ -1,6 +1,10 @@
 import { requireOrgAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { logQueryError } from "@/lib/log-query-error";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { initials } from "@/components/memo-badges";
 import { InviteUserForm } from "./invite-user-form";
 import { UserRowControls } from "./user-row-controls";
 
@@ -28,48 +32,65 @@ export default async function UsersPage() {
   logQueryError("admin.users.departments", departmentsError);
 
   return (
-    <main className="mx-auto max-w-5xl">
-      <h1 className="mb-8 text-3xl headline">users</h1>
-      <InviteUserForm departments={departments ?? []} />
-      <table className="w-full border-collapse text-sm">
-        <thead>
-          <tr className="border-b border-ink text-left text-xs uppercase tracking-wide text-muted">
-            <th className="py-2">Name</th>
-            <th className="py-2">Email</th>
-            <th className="py-2">Designation</th>
-            <th className="py-2">Status</th>
-            <th className="py-2">Role / Department</th>
-          </tr>
-        </thead>
-        <tbody>
-          {(users ?? []).map((u) => (
-            <tr key={u.id} className="border-b border-rule align-middle">
-              <td className="py-3 font-medium">{u.name}</td>
-              <td className="py-3 text-body">{u.email}</td>
-              <td className="py-3 text-body">{u.designation ?? "—"}</td>
-              <td className="py-3">
-                <span
-                  className={`text-xs font-medium uppercase tracking-wide ${
-                    u.status === "active" ? "text-ink" : "text-muted"
-                  }`}
-                >
-                  {u.status}
-                </span>
-              </td>
-              <td className="py-3">
-                <UserRowControls
-                  userId={u.id}
-                  role={u.role}
-                  status={u.status}
-                  departmentId={u.department_id}
-                  departments={departments ?? []}
-                  isSelf={u.id === admin.id}
-                />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </main>
+    <div className="mx-auto max-w-6xl">
+      <div className="mb-6">
+        <h1 className="text-2xl font-semibold tracking-tight">Users</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Everyone in your organization.</p>
+      </div>
+
+      <div className="mb-6">
+        <InviteUserForm departments={departments ?? []} />
+      </div>
+
+      <div className="rounded-xl border bg-card shadow-sm">
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Designation</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Role / Department</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {(users ?? []).map((u) => (
+                <TableRow key={u.id}>
+                  <TableCell>
+                    <div className="flex items-center gap-2.5">
+                      <Avatar className="h-8 w-8 shrink-0">
+                        <AvatarFallback className="text-xs">{initials(u.name)}</AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0">
+                        <p className="truncate font-medium">{u.name}</p>
+                        <p className="truncate text-xs text-muted-foreground">{u.email}</p>
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+                    {u.designation ?? "—"}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={u.status === "active" ? "default" : "secondary"} className={u.status === "active" ? "bg-lime/40 text-[#3f5200] hover:bg-lime/40" : ""}>
+                      {u.status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <UserRowControls
+                      userId={u.id}
+                      role={u.role}
+                      status={u.status}
+                      departmentId={u.department_id}
+                      departments={departments ?? []}
+                      isSelf={u.id === admin.id}
+                    />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      </div>
+    </div>
   );
 }

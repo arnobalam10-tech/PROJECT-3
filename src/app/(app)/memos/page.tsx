@@ -1,18 +1,11 @@
 import Link from "next/link";
+import { Plus } from "lucide-react";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { logQueryError } from "@/lib/log-query-error";
-
-const STATUS_LABELS: Record<string, string> = {
-  draft: "Draft",
-  submitted: "Submitted",
-  pending_review: "Pending Review",
-  pending_approval: "Pending Approval",
-  changes_requested: "Changes Requested",
-  rejected: "Rejected",
-  approved: "Approved",
-  cancelled: "Cancelled",
-};
+import { buttonVariants } from "@/components/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { StatusBadge, PriorityBadge } from "@/components/memo-badges";
 
 export default async function MyMemosPage() {
   const profile = await requireProfile();
@@ -41,62 +34,67 @@ export default async function MyMemosPage() {
   const rows = (memos ?? []) as unknown as Row[];
 
   return (
-    <main className="mx-auto max-w-5xl">
-      <div className="mb-8 flex items-center justify-between">
-        <h1 className="text-3xl headline">my memos</h1>
-        <Link href="/memos/new" className="bg-ink px-4 py-2 text-sm font-medium text-surface">
-          new memo
+    <div className="mx-auto max-w-6xl">
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">My Memos</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Everything you&apos;ve authored.</p>
+        </div>
+        <Link href="/memos/new" className={buttonVariants()}>
+          <Plus className="h-4 w-4" />
+          New memo
         </Link>
       </div>
-      <table className="w-full border-collapse text-sm">
-        <thead>
-          <tr className="border-b border-ink text-left text-xs uppercase tracking-wide text-muted">
-            <th className="py-2">Number</th>
-            <th className="py-2">Subject</th>
-            <th className="py-2">Status</th>
-            <th className="py-2">Current Participant</th>
-            <th className="py-2">Priority</th>
-            <th className="py-2">Submitted</th>
-            <th className="py-2">Last Activity</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((m) => {
-            // Derived from workflow_steps, not any stored "current step"
-            // pointer — memos itself has no such column (see DATABASE.md:
-            // "who currently holds this memo" is always a live query).
-            const current = m.workflow_steps?.find((s) => s.status === "current");
-            return (
-              <tr key={m.id} className="border-b border-rule">
-                <td className="py-3 font-mono text-xs">{m.memo_number}</td>
-                <td className="py-3">
-                  <Link href={`/memos/${m.id}`} className="font-medium underline">
-                    {m.subject}
-                  </Link>
-                </td>
-                <td className="py-3 text-xs font-medium uppercase tracking-wide">
-                  {STATUS_LABELS[m.status] ?? m.status}
-                </td>
-                <td className="py-3">{current?.profiles?.name ?? "—"}</td>
-                <td className="py-3 text-xs font-medium uppercase tracking-wide">
-                  {m.priority === "urgent" ? <span className="text-accent">{m.priority}</span> : m.priority}
-                </td>
-                <td className="py-3 text-body">
-                  {m.submitted_at ? new Date(m.submitted_at).toLocaleDateString() : "—"}
-                </td>
-                <td className="py-3 text-body">{new Date(m.updated_at).toLocaleString()}</td>
-              </tr>
-            );
-          })}
-          {rows.length === 0 && (
-            <tr>
-              <td colSpan={7} className="py-6 text-center text-muted">
-                No memos yet — create your first draft.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-    </main>
+
+      <div className="rounded-xl border bg-card shadow-sm">
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Memo</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Current holder</TableHead>
+                <TableHead>Priority</TableHead>
+                <TableHead>Submitted</TableHead>
+                <TableHead className="text-right">Last activity</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map((m) => {
+                const current = m.workflow_steps?.find((s) => s.status === "current");
+                return (
+                  <TableRow key={m.id}>
+                    <TableCell className="max-w-64">
+                      <Link href={`/memos/${m.id}`} className="font-medium hover:underline">
+                        {m.subject}
+                      </Link>
+                      <p className="text-xs text-muted-foreground">{m.memo_number}</p>
+                    </TableCell>
+                    <TableCell><StatusBadge status={m.status} /></TableCell>
+                    <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+                      {current?.profiles?.name ?? "—"}
+                    </TableCell>
+                    <TableCell><PriorityBadge priority={m.priority} /></TableCell>
+                    <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+                      {m.submitted_at ? new Date(m.submitted_at).toLocaleDateString() : "—"}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-right text-sm text-muted-foreground">
+                      {new Date(m.updated_at).toLocaleDateString()}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+              {rows.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
+                    No memos yet — create your first draft.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </div>
+    </div>
   );
 }

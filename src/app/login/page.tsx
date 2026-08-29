@@ -3,56 +3,47 @@
 import { useActionState } from "react";
 import Link from "next/link";
 import { login } from "./actions";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function LoginPage() {
   const [state, formAction, pending] = useActionState(login, { error: null });
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <header className="border-b-[3px] border-ink px-6 py-4">
-        <Link href="/" className="headline text-lg">
-          relay
-        </Link>
-      </header>
-      <main className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-6 py-16">
-        <h1 className="headline mb-8 text-4xl">sign in</h1>
-        <form action={formAction} className="flex flex-col gap-4">
-          <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium uppercase tracking-wide text-muted">Email</span>
-            <input
-              type="email"
-              name="email"
-              required
-              className="border border-ink bg-surface px-3 py-2 outline-none focus:outline-2 focus:outline-ink"
-            />
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium uppercase tracking-wide text-muted">
-              Password
-            </span>
-            <input
-              type="password"
-              name="password"
-              required
-              className="border border-ink bg-surface px-3 py-2 outline-none focus:outline-2 focus:outline-ink"
-            />
-          </label>
-          {state.error && <p className="text-sm text-accent">{state.error}</p>}
-          <button
-            type="submit"
-            disabled={pending}
-            className="mt-2 bg-ink px-4 py-2 text-sm font-medium uppercase tracking-wide text-surface disabled:opacity-50"
-          >
-            {pending ? "signing in…" : "sign in"}
-          </button>
-        </form>
-        <p className="mt-6 text-sm text-body">
-          No organization yet?{" "}
-          <Link href="/signup" className="underline">
-            Create one
-          </Link>
-        </p>
-      </main>
+    <div className="flex min-h-screen flex-col items-center justify-center bg-secondary/40 px-6 py-12">
+      <Link href="/" className="mb-8 text-xl font-semibold tracking-tight">
+        Relay
+      </Link>
+      <Card className="w-full max-w-sm shadow-lg">
+        <CardHeader>
+          <CardTitle className="text-2xl">Sign in</CardTitle>
+          <CardDescription>Welcome back — enter your details to continue.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form action={formAction} className="flex flex-col gap-4">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="email">Email</Label>
+              <Input id="email" type="email" name="email" required autoComplete="email" />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="password">Password</Label>
+              <Input id="password" type="password" name="password" required autoComplete="current-password" />
+            </div>
+            {state.error && <p className="text-sm text-destructive">{state.error}</p>}
+            <Button type="submit" disabled={pending} className="mt-2 w-full">
+              {pending ? "Signing in…" : "Sign in"}
+            </Button>
+          </form>
+          <p className="mt-6 text-center text-sm text-muted-foreground">
+            No organization yet?{" "}
+            <Link href="/signup" className="font-medium text-primary hover:underline">
+              Create one
+            </Link>
+          </p>
+        </CardContent>
+      </Card>
     </div>
   );
 }

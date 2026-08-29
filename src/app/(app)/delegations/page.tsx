@@ -1,6 +1,8 @@
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { logQueryError } from "@/lib/log-query-error";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { NewDelegationForm } from "./new-delegation-form";
 import { RevokeDelegationButton } from "./revoke-delegation-button";
 
@@ -49,68 +51,75 @@ export default async function DelegationsPage() {
     .order("created_at", { ascending: false });
   logQueryError("delegations.own", rowsError);
 
-  const items = ((rows ?? []) as unknown as Delegation[]);
+  const items = (rows ?? []) as unknown as Delegation[];
   const given = items.filter((d) => d.delegating_user_id === profile.id);
   const received = items.filter((d) => d.delegate_user_id === profile.id);
 
-  function statusBadge(d: Delegation) {
-    // No accent here — a delegation's status is informational (nothing on
-    // this page requires the viewer to act on it right now), so it stays
-    // within the near-black/muted-gray pair per DESIGN.md, never red.
+  function StatusPill({ d }: { d: Delegation }) {
     const s = effectiveStatus(d);
-    const color = s === "active" ? "text-ink" : "text-muted";
-    return <span className={`text-xs font-medium uppercase tracking-wide ${color}`}>{s}</span>;
+    if (s === "active") return <Badge className="bg-lime/40 text-[#3f5200] hover:bg-lime/40">Active</Badge>;
+    if (s === "expired") return <Badge variant="secondary">Expired</Badge>;
+    return <Badge variant="secondary">Revoked</Badge>;
   }
 
   return (
-    <main className="mx-auto max-w-3xl">
-      <h1 className="mb-8 text-3xl headline">delegations</h1>
-      <NewDelegationForm members={members ?? []} />
+    <div className="mx-auto max-w-3xl">
+      <div className="mb-6">
+        <h1 className="text-2xl font-semibold tracking-tight">Delegations</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Let someone act on your behalf for a date range — every action they take is recorded as
+          theirs, on your behalf.
+        </p>
+      </div>
 
-      <section className="mb-10">
-        <h2 className="mb-3 text-xs font-medium uppercase tracking-wide text-muted">
-          Delegations I&apos;ve given
-        </h2>
-        <ul className="flex flex-col gap-2">
+      <div className="mb-8">
+        <NewDelegationForm members={members ?? []} />
+      </div>
+
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="text-base">Delegations I&apos;ve given</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col divide-y">
           {given.map((d) => (
-            <li key={d.id} className="flex items-center justify-between border border-ink px-3 py-2 text-sm">
-              <div>
-                <p>
-                  To <span className="font-medium">{d.delegate?.name ?? "—"}</span> ·{" "}
-                  {d.start_date} to {d.end_date}
+            <div key={d.id} className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
+              <div className="min-w-0">
+                <p className="text-sm">
+                  To <span className="font-medium">{d.delegate?.name ?? "—"}</span> · {d.start_date} to{" "}
+                  {d.end_date}
                 </p>
-                {d.reason && <p className="text-xs text-muted">{d.reason}</p>}
+                {d.reason && <p className="text-xs text-muted-foreground">{d.reason}</p>}
               </div>
-              <div className="flex items-center gap-3">
-                {statusBadge(d)}
+              <div className="flex shrink-0 items-center gap-3">
+                <StatusPill d={d} />
                 {effectiveStatus(d) === "active" && <RevokeDelegationButton delegationId={d.id} />}
               </div>
-            </li>
+            </div>
           ))}
-          {given.length === 0 && <li className="py-3 text-sm text-muted">None yet.</li>}
-        </ul>
-      </section>
+          {given.length === 0 && <p className="py-3 text-sm text-muted-foreground">None yet.</p>}
+        </CardContent>
+      </Card>
 
-      <section>
-        <h2 className="mb-3 text-xs font-medium uppercase tracking-wide text-muted">
-          Delegated to me
-        </h2>
-        <ul className="flex flex-col gap-2">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Delegated to me</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col divide-y">
           {received.map((d) => (
-            <li key={d.id} className="flex items-center justify-between border border-ink px-3 py-2 text-sm">
-              <div>
-                <p>
-                  From <span className="font-medium">{d.delegator?.name ?? "—"}</span> ·{" "}
-                  {d.start_date} to {d.end_date}
+            <div key={d.id} className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
+              <div className="min-w-0">
+                <p className="text-sm">
+                  From <span className="font-medium">{d.delegator?.name ?? "—"}</span> · {d.start_date} to{" "}
+                  {d.end_date}
                 </p>
-                {d.reason && <p className="text-xs text-muted">{d.reason}</p>}
+                {d.reason && <p className="text-xs text-muted-foreground">{d.reason}</p>}
               </div>
-              {statusBadge(d)}
-            </li>
+              <StatusPill d={d} />
+            </div>
           ))}
-          {received.length === 0 && <li className="py-3 text-sm text-muted">None yet.</li>}
-        </ul>
-      </section>
-    </main>
+          {received.length === 0 && <p className="py-3 text-sm text-muted-foreground">None yet.</p>}
+        </CardContent>
+      </Card>
+    </div>
   );
 }

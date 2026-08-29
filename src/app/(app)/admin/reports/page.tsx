@@ -1,19 +1,15 @@
 import { requireOrgAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { logQueryError } from "@/lib/log-query-error";
-
-const STATUS_LABELS: Record<string, string> = {
-  draft: "Draft",
-  submitted: "Submitted",
-  pending_review: "Pending Review",
-  pending_approval: "Pending Approval",
-  changes_requested: "Changes Requested",
-  rejected: "Rejected",
-  approved: "Approved",
-  cancelled: "Cancelled",
-};
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { STATUS_LABELS } from "@/components/memo-badges";
 
 type SearchParams = { from?: string; to?: string; department?: string; category?: string; status?: string };
+
+const selectClasses =
+  "h-9 rounded-lg border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 
 function formatDuration(hours: number) {
   if (hours < 24) return `${hours.toFixed(1)}h`;
@@ -87,92 +83,89 @@ export default async function ReportsPage({
     completionHours.length > 0 ? completionHours.reduce((a, b) => a + b, 0) / completionHours.length : null;
 
   return (
-    <main className="mx-auto max-w-5xl">
-      <h1 className="mb-8 text-3xl headline">reports</h1>
+    <div className="mx-auto max-w-6xl">
+      <div className="mb-6">
+        <h1 className="text-2xl font-semibold tracking-tight">Reports</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Org-wide memo activity.</p>
+      </div>
 
-      <form className="mb-8 grid grid-cols-2 gap-3 border border-ink p-4 text-sm sm:grid-cols-5">
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium uppercase tracking-wide text-muted">From</span>
-          <input type="date" name="from" defaultValue={params.from} className="border border-ink px-2 py-1.5" />
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium uppercase tracking-wide text-muted">To</span>
-          <input type="date" name="to" defaultValue={params.to} className="border border-ink px-2 py-1.5" />
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium uppercase tracking-wide text-muted">Department</span>
-          <select name="department" defaultValue={params.department ?? ""} className="border border-ink bg-surface px-2 py-1.5">
-            <option value="">Any</option>
-            {(departments ?? []).map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium uppercase tracking-wide text-muted">Category</span>
-          <select name="category" defaultValue={params.category ?? ""} className="border border-ink bg-surface px-2 py-1.5">
-            <option value="">Any</option>
-            {(categories ?? []).map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium uppercase tracking-wide text-muted">Status</span>
-          <select name="status" defaultValue={params.status ?? ""} className="border border-ink bg-surface px-2 py-1.5">
-            <option value="">Any</option>
-            {Object.entries(STATUS_LABELS).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <div className="col-span-2 sm:col-span-5">
-          <button type="submit" className="bg-ink px-4 py-2 font-medium text-surface">
-            apply filters
-          </button>
-        </div>
-      </form>
+      <Card className="mb-6">
+        <CardContent>
+          <form className="grid grid-cols-2 gap-4 sm:grid-cols-5">
+            <label className="flex flex-col gap-1.5">
+              <span className="text-xs font-medium text-muted-foreground">From</span>
+              <Input type="date" name="from" defaultValue={params.from} />
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-xs font-medium text-muted-foreground">To</span>
+              <Input type="date" name="to" defaultValue={params.to} />
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-xs font-medium text-muted-foreground">Department</span>
+              <select name="department" defaultValue={params.department ?? ""} className={selectClasses}>
+                <option value="">Any</option>
+                {(departments ?? []).map((d) => (
+                  <option key={d.id} value={d.id}>{d.name}</option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-xs font-medium text-muted-foreground">Category</span>
+              <select name="category" defaultValue={params.category ?? ""} className={selectClasses}>
+                <option value="">Any</option>
+                {(categories ?? []).map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-xs font-medium text-muted-foreground">Status</span>
+              <select name="status" defaultValue={params.status ?? ""} className={selectClasses}>
+                <option value="">Any</option>
+                {Object.entries(STATUS_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
+            </label>
+            <div className="col-span-2 sm:col-span-5">
+              <Button type="submit">Apply filters</Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
 
-      <div className="mb-10 grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
         <StatTile label="Total memos" value={rows.length} />
         <StatTile label="Urgent" value={urgentCount} accent />
-        <StatTile label="Pending (submitted/changes)" value={pendingApprovalCount} />
+        <StatTile label="Pending" value={pendingApprovalCount} />
         <StatTile label="Rejected" value={rejectedCount} />
-        <StatTile label="Change requests (current)" value={changeRequestCount} />
-        <StatTile
-          label="Avg. completion time"
-          value={avgCompletionHours !== null ? formatDuration(avgCompletionHours) : "—"}
-          isText
-        />
+        <StatTile label="Change requests" value={changeRequestCount} />
+        <StatTile label="Avg. completion" value={avgCompletionHours !== null ? formatDuration(avgCompletionHours) : "—"} isText />
       </div>
 
-      <div className="grid grid-cols-1 gap-8 sm:grid-cols-3">
-        <BreakdownTable title="By status" data={byStatus} labelize={(k) => STATUS_LABELS[k] ?? k} />
-        <BreakdownTable title="By department" data={byDepartment} />
-        <BreakdownTable title="By category" data={byCategory} />
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <BreakdownCard title="By status" data={byStatus} labelize={(k) => STATUS_LABELS[k] ?? k} />
+        <BreakdownCard title="By department" data={byDepartment} />
+        <BreakdownCard title="By category" data={byCategory} />
       </div>
-    </main>
+    </div>
   );
 }
 
 function StatTile({ label, value, accent, isText }: { label: string; value: number | string; accent?: boolean; isText?: boolean }) {
   return (
-    <div className="border border-ink bg-surface p-4">
-      <p className="text-xs font-medium uppercase tracking-wide text-muted">{label}</p>
-      <p className={`mt-1 text-3xl font-bold ${accent ? "text-accent" : ""}`}>
-        {isText ? value : value.toLocaleString()}
-      </p>
-    </div>
+    <Card>
+      <CardContent>
+        <p className="truncate text-xs text-muted-foreground">{label}</p>
+        <p className={`mt-1 text-2xl font-semibold ${accent ? "text-primary" : ""}`}>
+          {isText ? value : value.toLocaleString()}
+        </p>
+      </CardContent>
+    </Card>
   );
 }
 
-function BreakdownTable({
+function BreakdownCard({
   title,
   data,
   labelize,
@@ -184,23 +177,25 @@ function BreakdownTable({
   const entries = [...data.entries()].sort((a, b) => b[1] - a[1]);
   const max = Math.max(1, ...entries.map(([, c]) => c));
   return (
-    <div>
-      <h2 className="mb-3 text-xs font-medium uppercase tracking-wide text-muted">{title}</h2>
-      {/* Solid black bars, 4px black baseline, no gridlines, plain numeral
-          labels — per DESIGN.md's chart rules. No accent here: none of
-          these breakdowns represent an act-now signal, just a count. */}
-      <div className="flex flex-col gap-2.5 border-t-4 border-ink pt-3">
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">{title}</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
         {entries.map(([key, count]) => (
           <div key={key} className="flex items-center gap-3 text-sm">
-            <span className="w-28 shrink-0 truncate">{labelize ? labelize(key) : key}</span>
-            <div className="h-3 flex-1 bg-rule/40">
-              <div className="h-3 bg-ink" style={{ width: `${(count / max) * 100}%` }} />
+            <span className="w-28 shrink-0 truncate text-muted-foreground">{labelize ? labelize(key) : key}</span>
+            <div className="h-2.5 flex-1 rounded-full bg-secondary">
+              <div
+                className="h-2.5 rounded-full bg-primary"
+                style={{ width: `${(count / max) * 100}%` }}
+              />
             </div>
             <span className="w-6 shrink-0 text-right font-medium">{count}</span>
           </div>
         ))}
-        {entries.length === 0 && <p className="text-sm text-muted">No data.</p>}
-      </div>
-    </div>
+        {entries.length === 0 && <p className="text-sm text-muted-foreground">No data.</p>}
+      </CardContent>
+    </Card>
   );
 }

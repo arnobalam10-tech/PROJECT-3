@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { logQueryError } from "@/lib/log-query-error";
+import { Button } from "@/components/ui/button";
 import { MarkReadButton } from "./mark-read-button";
 import { markAllNotificationsRead } from "./actions";
 
@@ -20,10 +21,6 @@ export default async function NotificationsPage() {
   const profile = await requireProfile();
   const supabase = await createClient();
 
-  // RLS (notifications_select_own) already restricts this to the caller's
-  // own rows — there is no organization- or admin-level broadening here,
-  // unlike memos. A user's notifications are never visible to anyone else,
-  // including another admin in the same org.
   const { data: notifications, error: notificationsError } = await supabase
     .from("notifications")
     .select("id, type, message, memo_id, is_read, created_at")
@@ -35,49 +32,48 @@ export default async function NotificationsPage() {
   const unreadCount = items.filter((n) => !n.is_read).length;
 
   return (
-    <main className="mx-auto max-w-3xl">
-      <div className="mb-8 flex items-center justify-between">
-        <h1 className="text-3xl headline">notifications</h1>
+    <div className="mx-auto max-w-3xl">
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Notifications</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Everything that&apos;s happened on your memos.</p>
+        </div>
         {unreadCount > 0 && (
           <form action={markAllNotificationsRead}>
-            <button
-              type="submit"
-              className="border border-ink px-3 py-1.5 text-xs font-medium uppercase tracking-wide"
-            >
-              mark all read
-            </button>
+            <Button type="submit" variant="outline" size="sm">
+              Mark all read
+            </Button>
           </form>
         )}
       </div>
 
-      <ul className="flex flex-col">
-        {items.map((n) => (
-          <li
-            key={n.id}
-            className={`flex items-center justify-between border-b border-rule py-3 text-sm ${
-              n.is_read ? "text-muted" : ""
-            }`}
-          >
-            <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-muted">
-                {TYPE_LABELS[n.type] ?? n.type} · {new Date(n.created_at).toLocaleString()}
-                {!n.is_read && <span className="ml-2 text-accent">● unread</span>}
-              </p>
-              <p className="mt-1">
-                {n.memo_id ? (
-                  <Link href={`/memos/${n.memo_id}`} className="underline">
-                    {n.message}
-                  </Link>
-                ) : (
-                  n.message
-                )}
-              </p>
+      <div className="rounded-xl border bg-card shadow-sm">
+        <div className="flex flex-col divide-y">
+          {items.map((n) => (
+            <div key={n.id} className="flex items-center justify-between gap-3 px-4 py-3">
+              <div className="min-w-0">
+                <p className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                  {!n.is_read && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />}
+                  {TYPE_LABELS[n.type] ?? n.type} · {new Date(n.created_at).toLocaleString()}
+                </p>
+                <p className={`mt-1 text-sm ${n.is_read ? "text-muted-foreground" : "text-foreground"}`}>
+                  {n.memo_id ? (
+                    <Link href={`/memos/${n.memo_id}`} className="hover:underline">
+                      {n.message}
+                    </Link>
+                  ) : (
+                    n.message
+                  )}
+                </p>
+              </div>
+              {!n.is_read && <MarkReadButton notificationId={n.id} />}
             </div>
-            {!n.is_read && <MarkReadButton notificationId={n.id} />}
-          </li>
-        ))}
-        {items.length === 0 && <li className="py-6 text-center text-muted">No notifications yet.</li>}
-      </ul>
-    </main>
+          ))}
+          {items.length === 0 && (
+            <p className="py-10 text-center text-sm text-muted-foreground">No notifications yet.</p>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }

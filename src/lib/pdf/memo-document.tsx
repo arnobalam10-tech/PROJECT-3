@@ -1,20 +1,23 @@
 import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
 import { renderTiptapBody } from "./tiptap-to-pdf";
 
-// Palette matches DESIGN.md's Swiss/Basel system: near-black ink, muted gray
-// for secondary/meta text and terminal statuses, and the single red accent
-// reserved for Urgent priority only (see the Phase 10 correction: an export
-// has no "viewing user" whose turn it is, so a terminal status like Rejected
-// is never red here — see statusColor() below). No other hues, no rounded
-// corners/shadows.
-const INK = "#111111";
-const MUTED = "#8A867E";
-const RED = "#E32213";
-const BORDER = "#111111";
+// Palette matches DESIGN.md v2 (modern SaaS): black ink, neutral gray for
+// secondary/meta text and terminal statuses, violet as the brand accent for
+// section rules, and a warm rose tone for Urgent priority specifically —
+// matching the same rose-100/rose-700 chip used for "Urgent" in the app UI.
+// An export has no "viewing user" whose turn it is, so a terminal status
+// like Rejected is never given the urgent-warning color here — see
+// statusColor() below.
+const INK = "#000000";
+const MUTED = "#6E6E76";
+const VIOLET = "#7E3BED";
+const URGENT = "#BE123C";
+const BORDER = "#E5E5EA";
 
 const styles = StyleSheet.create({
   page: { padding: 40, fontSize: 10, color: INK, fontFamily: "Helvetica" },
-  orgName: { fontSize: 9, textTransform: "uppercase", letterSpacing: 1, color: MUTED, marginBottom: 4 },
+  brandBar: { width: 28, height: 3, backgroundColor: VIOLET, marginBottom: 10 },
+  orgName: { fontSize: 9, textTransform: "uppercase", letterSpacing: 1, color: VIOLET, fontWeight: 700, marginBottom: 4 },
   memoNumber: { fontSize: 9, color: MUTED, marginBottom: 2 },
   subject: { fontSize: 20, fontWeight: 700, marginBottom: 12 },
   statusBadge: { fontSize: 9, textTransform: "uppercase", letterSpacing: 1, fontWeight: 700, marginBottom: 16 },
@@ -23,9 +26,9 @@ const styles = StyleSheet.create({
   metaLabel: { fontSize: 7, textTransform: "uppercase", letterSpacing: 1, color: MUTED, marginBottom: 2 },
   metaValue: { fontSize: 10 },
   sectionTitle: { fontSize: 9, textTransform: "uppercase", letterSpacing: 1, color: MUTED, marginTop: 18, marginBottom: 6, borderBottomWidth: 1, borderBottomColor: BORDER, paddingBottom: 4 },
-  row: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 4, borderBottomWidth: 0.5, borderBottomColor: "#CCCCCC" },
+  row: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 4, borderBottomWidth: 0.5, borderBottomColor: "#E5E5EA" },
   small: { fontSize: 8, color: MUTED },
-  footer: { position: "absolute", bottom: 24, left: 40, right: 40, fontSize: 7, color: MUTED, textAlign: "center", borderTopWidth: 0.5, borderTopColor: "#CCCCCC", paddingTop: 6 },
+  footer: { position: "absolute", bottom: 24, left: 40, right: 40, fontSize: 7, color: MUTED, textAlign: "center", borderTopWidth: 0.5, borderTopColor: "#E5E5EA", paddingTop: 6 },
 });
 
 const STATUS_LABELS: Record<string, string> = {
@@ -97,6 +100,7 @@ export function MemoDocument(data: MemoPdfData) {
   return (
     <Document title={`${data.memoNumber} — ${data.subject}`}>
       <Page size="A4" style={styles.page}>
+        <View style={styles.brandBar} />
         <Text style={styles.orgName}>{data.organizationName}</Text>
         <Text style={styles.memoNumber}>{data.memoNumber}</Text>
         <Text style={styles.subject}>{data.subject}</Text>
@@ -120,7 +124,7 @@ export function MemoDocument(data: MemoPdfData) {
           </View>
           <View style={styles.metaCol}>
             <Text style={styles.metaLabel}>Priority</Text>
-            <Text style={[styles.metaValue, data.priority === "urgent" ? { color: RED } : {}]}>
+            <Text style={[styles.metaValue, data.priority === "urgent" ? { color: URGENT } : {}]}>
               {data.priority}
             </Text>
           </View>

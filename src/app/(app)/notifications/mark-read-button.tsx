@@ -2,6 +2,7 @@
 
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
 import { markNotificationRead } from "./actions";
 
 export function MarkReadButton({ notificationId }: { notificationId: string }) {
@@ -9,18 +10,20 @@ export function MarkReadButton({ notificationId }: { notificationId: string }) {
   const router = useRouter();
 
   return (
-    <button
+    <Button
       type="button"
+      variant="ghost"
+      size="sm"
       disabled={pending}
+      className="shrink-0"
       onClick={() =>
         startTransition(async () => {
           await markNotificationRead(notificationId);
           router.refresh();
         })
       }
-      className="text-xs font-medium uppercase tracking-wide underline disabled:opacity-50"
     >
-      mark read
-    </button>
+      Mark read
+    </Button>
   );
 }

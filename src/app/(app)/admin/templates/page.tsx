@@ -1,6 +1,8 @@
 import { requireOrgAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { logQueryError } from "@/lib/log-query-error";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { NewTemplateForm } from "./new-template-form";
 import { DeleteTemplateButton } from "./delete-template-button";
 
@@ -16,16 +18,20 @@ export default async function TemplatesPage() {
   logQueryError("admin.templates", templatesError);
 
   return (
-    <main className="mx-auto max-w-3xl">
-      <h1 className="mb-8 text-3xl headline">workflow templates</h1>
-      <p className="mb-6 text-sm text-body">
-        Reusable ordered position sequences (PRD §18). A template only supplies the initial
-        suggested chain — whoever holds a memo built from one can still deviate from it, same as
-        any custom workflow.
-      </p>
-      <NewTemplateForm />
+    <div className="mx-auto max-w-3xl">
+      <div className="mb-6">
+        <h1 className="text-2xl font-semibold tracking-tight">Workflow templates</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Reusable ordered position sequences. A template only supplies the initial suggested
+          chain — whoever holds a memo built from one can still deviate from it.
+        </p>
+      </div>
 
-      <ul className="flex flex-col gap-4">
+      <div className="mb-6">
+        <NewTemplateForm />
+      </div>
+
+      <div className="flex flex-col gap-4">
         {(templates ?? []).map((t) => {
           const positions = (t.workflow_template_positions as unknown as {
             id: string;
@@ -33,28 +39,33 @@ export default async function TemplatesPage() {
             position_label: string;
           }[]).slice().sort((a, b) => a.position_order - b.position_order);
           return (
-            <li key={t.id} className="border border-ink p-4">
-              <div className="mb-2 flex items-start justify-between">
-                <div>
-                  <p className="font-medium">{t.name}</p>
-                  {t.description && <p className="text-sm text-body">{t.description}</p>}
+            <Card key={t.id}>
+              <CardContent>
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-medium">{t.name}</p>
+                    {t.description && <p className="text-sm text-muted-foreground">{t.description}</p>}
+                  </div>
+                  <DeleteTemplateButton templateId={t.id} />
                 </div>
-                <DeleteTemplateButton templateId={t.id} />
-              </div>
-              <ol className="flex flex-wrap gap-2 text-xs">
-                {positions.map((p, i) => (
-                  <li key={p.id} className="border border-rule px-2 py-1">
-                    {i + 1}. {p.position_label}
-                  </li>
-                ))}
-              </ol>
-            </li>
+                <div className="flex flex-wrap items-center gap-2">
+                  {positions.map((p, i) => (
+                    <div key={p.id} className="flex items-center gap-2">
+                      <Badge variant="secondary">
+                        {i + 1}. {p.position_label}
+                      </Badge>
+                      {i < positions.length - 1 && <span className="text-muted-foreground">→</span>}
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
           );
         })}
         {(templates ?? []).length === 0 && (
-          <li className="py-6 text-center text-sm text-muted">No templates yet.</li>
+          <p className="py-10 text-center text-sm text-muted-foreground">No templates yet.</p>
         )}
-      </ul>
-    </main>
+      </div>
+    </div>
   );
 }

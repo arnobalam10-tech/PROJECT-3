@@ -1,8 +1,14 @@
 import { notFound } from "next/navigation";
+import { Download } from "lucide-react";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { logQueryError } from "@/lib/log-query-error";
 import { RichTextEditor } from "@/components/rich-text-editor";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button";
+import { StatusBadge, PriorityBadge, initials } from "@/components/memo-badges";
 import { MemoForm } from "../memo-form";
 import { AttachmentUpload } from "./attachment-upload";
 import { AttachmentList } from "./attachment-list";
@@ -13,17 +19,6 @@ import { ResubmitButton } from "./resubmit-button";
 import { CommentBox } from "./comment-box";
 import { VersionHistory } from "./version-history";
 
-const STATUS_LABELS: Record<string, string> = {
-  draft: "Draft",
-  submitted: "Submitted",
-  pending_review: "Pending Review",
-  pending_approval: "Pending Approval",
-  changes_requested: "Changes Requested",
-  rejected: "Rejected",
-  approved: "Approved",
-  cancelled: "Cancelled",
-};
-
 type TimelineEntry = {
   kind: "step" | "comment";
   at: string;
@@ -31,6 +26,16 @@ type TimelineEntry = {
   onBehalfOfName: string | null;
   label: string;
   body: string | null;
+};
+
+const STEP_STATUS_CLASSES: Record<string, string> = {
+  current: "bg-primary/10 text-primary",
+  queued: "bg-secondary text-muted-foreground",
+  approved: "bg-lime/40 text-[#3f5200]",
+  rejected: "bg-secondary text-muted-foreground",
+  changes_requested: "bg-amber-100 text-amber-800",
+  declined: "bg-secondary text-muted-foreground",
+  skipped: "bg-secondary text-muted-foreground",
 };
 
 export default async function MemoDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -54,7 +59,7 @@ export default async function MemoDetailPage({ params }: { params: Promise<{ id:
   const isDraftEditable = memo.author_id === profile.id && memo.status === "draft";
   const isChangesRequestedEditable = memo.author_id === profile.id && memo.status === "changes_requested";
   const isEditable = isDraftEditable || isChangesRequestedEditable;
-  const authorName = (memo.profiles as unknown as { name: string } | null)?.name;
+  const authorName = (memo.profiles as unknown as { name: string } | null)?.name ?? "—";
 
   const [
     { data: departments, error: departmentsError },
@@ -107,10 +112,6 @@ export default async function MemoDetailPage({ params }: { params: Promise<{ id:
   const currentStep = (steps ?? []).find((s) => s.status === "current");
   const isDirectHolder = currentStep?.assigned_user_id === profile.id;
 
-  // Delegation (PRD §19): the current holder's active delegate may also act.
-  // Only queried when there's an actual current step and the caller isn't
-  // already the direct holder — no need to check delegation for a memo with
-  // no one currently holding it, or when the caller already qualifies.
   let delegatingHolderName: string | null = null;
   if (currentStep && !isDirectHolder) {
     const { data: activeDelegation, error: delegationError } = await supabase
@@ -130,13 +131,9 @@ export default async function MemoDetailPage({ params }: { params: Promise<{ id:
   const isCurrentHolder = isDirectHolder || delegatingHolderName !== null;
 
   const hasBeenSubmitted = (steps ?? []).length > 0;
-  const otherMembers = members ?? []; // any active org member is eligible, including self
+  const otherMembers = members ?? [];
 
   const timeline: TimelineEntry[] = [
-    // Step entries show only the action + who/when. The actual comment
-    // text (reason/explanation/note) is carried by the corresponding
-    // `comments` row below instead — the RPCs write both, and showing the
-    // same text under both entries would just duplicate it in the UI.
     ...(steps ?? [])
       .filter((s) => s.acted_at)
       .map((s) => {
@@ -179,28 +176,22 @@ export default async function MemoDetailPage({ params }: { params: Promise<{ id:
   ].sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
 
   return (
-    <main className="mx-auto max-w-3xl">
-      <div className="mb-8 flex items-start justify-between">
-        <div>
-          <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted">
-            {memo.memo_number} · by {authorName ?? "—"} ·{" "}
-            <span
-              className={
-                ["approved", "rejected", "cancelled"].includes(memo.status) ? "" : "text-ink"
-              }
-            >
-              {STATUS_LABELS[memo.status] ?? memo.status}
-            </span>
-            {memo.priority === "urgent" && <span className="ml-2 text-accent">· urgent</span>}
-          </p>
-          <h1 className="text-3xl headline">{memo.subject}</h1>
+    <div className="mx-auto max-w-3xl">
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <span>{memo.memo_number}</span>
+            <span>·</span>
+            <span>by {authorName}</span>
+            <StatusBadge status={memo.status} />
+            {memo.priority === "urgent" && <PriorityBadge priority="urgent" />}
+          </div>
+          <h1 className="text-2xl font-semibold tracking-tight text-balance">{memo.subject}</h1>
         </div>
-        <div className="flex items-center gap-3">
-          <a
-            href={`/memos/${memo.id}/pdf`}
-            className="border border-ink px-3 py-1.5 text-xs font-medium uppercase tracking-wide"
-          >
-            export pdf
+        <div className="flex shrink-0 items-center gap-2">
+          <a href={`/memos/${memo.id}/pdf`} className={buttonVariants({ variant: "outline", size: "sm" })}>
+            <Download className="h-4 w-4" />
+            Export
           </a>
           {isDraftEditable && <DeleteDraftButton memoId={memo.id} />}
         </div>
@@ -228,128 +219,126 @@ export default async function MemoDetailPage({ params }: { params: Promise<{ id:
           )}
         </>
       ) : (
-        <div className="mb-8">
-          <RichTextEditor content={memo.body as Record<string, unknown>} editable={false} />
+        <Card className="mb-6">
+          <CardContent>
+            <RichTextEditor content={memo.body as Record<string, unknown>} editable={false} />
+          </CardContent>
+        </Card>
+      )}
+
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="text-base">Attachments</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <AttachmentList memoId={memo.id} attachments={attachments ?? []} editable={isDraftEditable} />
+          {isDraftEditable && (
+            <div className="mt-3">
+              <AttachmentUpload memoId={memo.id} />
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {isDraftEditable && !hasBeenSubmitted && (
+        <div className="mb-6">
+          <SubmitPanel
+            memoId={memo.id}
+            members={otherMembers}
+            templates={(templates ?? []).map((t) => ({
+              id: t.id,
+              name: t.name,
+              positions: (t.workflow_template_positions as unknown as { id: string; position_order: number; position_label: string }[])
+                .slice()
+                .sort((a, b) => a.position_order - b.position_order),
+            }))}
+          />
         </div>
       )}
 
-      <section className="mt-10">
-        <h2 className="mb-3 text-xs font-medium uppercase tracking-wide text-muted">
-          Attachments
-        </h2>
-        <AttachmentList memoId={memo.id} attachments={attachments ?? []} editable={isDraftEditable} />
-        {isDraftEditable && (
-          <div className="mt-3">
-            <AttachmentUpload memoId={memo.id} />
-          </div>
-        )}
-      </section>
-
-      {isDraftEditable && !hasBeenSubmitted && (
-        <SubmitPanel
-          memoId={memo.id}
-          members={otherMembers}
-          templates={(templates ?? []).map((t) => ({
-            id: t.id,
-            name: t.name,
-            positions: (t.workflow_template_positions as unknown as { id: string; position_order: number; position_label: string }[])
-              .slice()
-              .sort((a, b) => a.position_order - b.position_order),
-          }))}
-        />
-      )}
-
       {isCurrentHolder && (
-        <ActionPanel memoId={memo.id} members={otherMembers} actingOnBehalfOf={delegatingHolderName} />
+        <div className="mb-6">
+          <ActionPanel memoId={memo.id} members={otherMembers} actingOnBehalfOf={delegatingHolderName} />
+        </div>
       )}
 
       {hasBeenSubmitted && (
-        <section className="mt-10">
-          <h2 className="mb-3 text-xs font-medium uppercase tracking-wide text-muted">
-            Workflow
-          </h2>
-          {/* Square markers on a hairline vertical rule: red for the
-              current/pending step, black for resolved steps, muted
-              outline-only for steps still queued — the one place per this
-              page the accent marks "where the ball currently sits". */}
-          <ol className="flex flex-col text-sm">
-            {(steps ?? []).map((s, i) => (
-              <li key={s.id} className="relative flex gap-4 pb-5 last:pb-0">
-                {i !== (steps ?? []).length - 1 && (
-                  <span aria-hidden className="absolute left-[7px] top-4 bottom-0 w-px bg-rule" />
-                )}
-                <span
-                  aria-hidden
-                  className={`relative z-10 mt-1 h-3.5 w-3.5 shrink-0 border-2 ${
-                    s.status === "current"
-                      ? "border-accent bg-accent"
-                      : s.status === "queued"
-                        ? "border-muted bg-background"
-                        : "border-ink bg-ink"
-                  }`}
-                />
-                <div className="flex flex-1 items-center justify-between pt-px">
-                  <span>
-                    {(s.profiles as unknown as { name: string } | null)?.name ?? "—"}
-                    {!s.is_original && <span className="ml-2 text-xs text-muted">(added)</span>}
-                  </span>
-                  <span
-                    className={`text-xs font-medium uppercase tracking-wide ${
-                      s.status === "current" ? "text-accent" : s.status === "queued" ? "text-muted" : "text-ink"
-                    }`}
-                  >
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle className="text-base">Workflow</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col divide-y">
+            {(steps ?? []).map((s) => {
+              const name = (s.profiles as unknown as { name: string } | null)?.name ?? "—";
+              return (
+                <div key={s.id} className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <Avatar className="h-7 w-7 shrink-0">
+                      <AvatarFallback className="text-[10px]">{initials(name)}</AvatarFallback>
+                    </Avatar>
+                    <span className="truncate text-sm">
+                      {name}
+                      {!s.is_original && <span className="ml-1.5 text-xs text-muted-foreground">(added)</span>}
+                    </span>
+                  </div>
+                  <Badge className={`shrink-0 ${STEP_STATUS_CLASSES[s.status] ?? ""}`}>
                     {s.status.replace("_", " ")}
-                  </span>
+                  </Badge>
                 </div>
-              </li>
-            ))}
-          </ol>
-        </section>
+              );
+            })}
+          </CardContent>
+        </Card>
       )}
 
       {(versions ?? []).length > 0 && (
-        <section className="mt-10">
-          <h2 className="mb-3 text-xs font-medium uppercase tracking-wide text-muted">
-            Version History
-          </h2>
-          <VersionHistory
-            versions={(versions ?? []).map((v) => ({
-              id: v.id,
-              versionNumber: v.version_number,
-              editorName: (v.profiles as unknown as { name: string } | null)?.name ?? "—",
-              submittedAt: v.associated_submission_at,
-              snapshot: v.content_snapshot as { subject: string; body: Record<string, unknown> },
-            }))}
-          />
-        </section>
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle className="text-base">Version history</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <VersionHistory
+              versions={(versions ?? []).map((v) => ({
+                id: v.id,
+                versionNumber: v.version_number,
+                editorName: (v.profiles as unknown as { name: string } | null)?.name ?? "—",
+                submittedAt: v.associated_submission_at,
+                snapshot: v.content_snapshot as { subject: string; body: Record<string, unknown> },
+              }))}
+            />
+          </CardContent>
+        </Card>
       )}
 
-      <section className="mt-10">
-        <h2 className="mb-3 text-xs font-medium uppercase tracking-wide text-muted">
-          Timeline
-        </h2>
-        <ol className="flex flex-col text-sm">
-          {timeline.map((t, i) => (
-            <li key={i} className="relative flex gap-4 pb-4 last:pb-0">
-              {i !== timeline.length - 1 && (
-                <span aria-hidden className="absolute left-[3px] top-3 bottom-0 w-px bg-rule" />
-              )}
-              <span aria-hidden className="relative z-10 mt-1.5 h-1.5 w-1.5 shrink-0 bg-ink" />
-              <div>
-                <p className="text-xs uppercase tracking-wide text-muted">
-                  {t.actorName} · {t.label} · {new Date(t.at).toLocaleString()}
-                  {t.onBehalfOfName && (
-                    <span className="normal-case"> (on behalf of {t.onBehalfOfName})</span>
-                  )}
-                </p>
-                {t.body && <p className="mt-1">{t.body}</p>}
-              </div>
-            </li>
-          ))}
-          {timeline.length === 0 && <li className="text-muted">No activity yet.</li>}
-        </ol>
-        <CommentBox memoId={memo.id} />
-      </section>
-    </main>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Timeline</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ol className="flex flex-col text-sm">
+            {timeline.map((t, i) => (
+              <li key={i} className="relative flex gap-3 pb-4 last:pb-0">
+                {i !== timeline.length - 1 && (
+                  <span aria-hidden className="absolute left-[3px] top-3 bottom-0 w-px bg-border" />
+                )}
+                <span aria-hidden className="relative z-10 mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+                <div className="min-w-0">
+                  <p className="text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground">{t.actorName}</span> · {t.label} ·{" "}
+                    {new Date(t.at).toLocaleString()}
+                    {t.onBehalfOfName && <span> (on behalf of {t.onBehalfOfName})</span>}
+                  </p>
+                  {t.body && <p className="mt-1 text-sm">{t.body}</p>}
+                </div>
+              </li>
+            ))}
+            {timeline.length === 0 && <li className="text-sm text-muted-foreground">No activity yet.</li>}
+          </ol>
+          <div className="mt-4 border-t pt-4">
+            <CommentBox memoId={memo.id} />
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

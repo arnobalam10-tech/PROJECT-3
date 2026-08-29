@@ -1,9 +1,12 @@
-import Link from "next/link";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { logQueryError } from "@/lib/log-query-error";
-import { logout } from "./actions";
-import { NavLinks } from "./nav-links";
+import { AppSidebar } from "./app-sidebar";
+import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { Separator } from "@/components/ui/separator";
+import { TopbarSearch } from "./topbar-search";
+import { NotificationBell } from "./notification-bell";
+import { UserMenu } from "./user-menu";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const profile = await requireProfile();
@@ -16,29 +19,23 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   logQueryError("layout.unreadCount", unreadCountError);
 
   return (
-    <div className="min-h-screen">
-      <header className="flex flex-col gap-3 border-b-[3px] border-ink px-6 py-3 md:flex-row md:items-center md:justify-between">
-        <div className="flex flex-wrap items-center gap-6">
-          <Link href="/dashboard" className="headline text-lg">
-            relay
-          </Link>
-          <NavLinks isAdmin={profile.role === "org_admin"} unreadCount={unreadCount ?? 0} />
-        </div>
-        <div className="flex items-center gap-4 text-xs">
-          <Link href="/profile" className="uppercase tracking-wide text-muted hover:text-ink">
-            {profile.name} · {profile.role === "org_admin" ? "Admin" : "User"}
-          </Link>
-          <form action={logout}>
-            <button
-              type="submit"
-              className="border border-ink px-3 py-1.5 font-medium uppercase tracking-wide"
-            >
-              Sign out
-            </button>
-          </form>
-        </div>
-      </header>
-      <div className="px-6 py-8">{children}</div>
-    </div>
+    <SidebarProvider>
+      <AppSidebar isAdmin={profile.role === "org_admin"} unreadCount={unreadCount ?? 0} />
+      <SidebarInset>
+        <header className="flex h-16 shrink-0 items-center gap-3 border-b bg-background px-4 sm:px-6">
+          <SidebarTrigger className="-ml-1" />
+          <Separator orientation="vertical" className="h-6" />
+          <TopbarSearch />
+          <div className="ml-auto flex items-center gap-2">
+            <NotificationBell unreadCount={unreadCount ?? 0} />
+            <UserMenu
+              name={profile.name}
+              role={profile.role === "org_admin" ? "Admin" : "Regular user"}
+            />
+          </div>
+        </header>
+        <main className="flex-1 p-4 sm:p-6 lg:p-8">{children}</main>
+      </SidebarInset>
+    </SidebarProvider>
   );
 }

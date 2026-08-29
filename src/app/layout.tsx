@@ -1,11 +1,10 @@
 import type { Metadata } from "next";
-import { Archivo } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
+import { cn } from "@/lib/utils";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
-const archivo = Archivo({
-  variable: "--font-archivo",
-  subsets: ["latin"],
-});
+const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
 export const metadata: Metadata = {
   title: "Relay",
@@ -14,8 +13,10 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${archivo.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col bg-background font-sans text-ink">{children}</body>
+    <html lang="en" className={cn("h-full", "antialiased", inter.variable)}>
+      <body className="min-h-full flex flex-col bg-background font-sans text-foreground">
+        <TooltipProvider delay={200}>{children}</TooltipProvider>
+      </body>
     </html>
   );
 }

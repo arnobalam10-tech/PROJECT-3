@@ -3,6 +3,7 @@
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { uploadAttachment } from "../actions";
+import { Button } from "@/components/ui/button";
 
 export function AttachmentUpload({ memoId }: { memoId: string }) {
   const router = useRouter();
@@ -27,17 +28,19 @@ export function AttachmentUpload({ memoId }: { memoId: string }) {
           }
         });
       }}
-      className="flex items-center gap-3"
+      className="flex flex-wrap items-center gap-3"
     >
-      <input type="file" name="file" required disabled={pending} className="text-sm" />
-      <button
-        type="submit"
+      <input
+        type="file"
+        name="file"
+        required
         disabled={pending}
-        className="border border-ink px-3 py-1.5 text-xs font-medium uppercase tracking-wide disabled:opacity-50"
-      >
-        {pending ? "uploading…" : "upload"}
-      </button>
-      {error && <span className="text-sm text-accent">{error}</span>}
+        className="text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-secondary file:px-3 file:py-1.5 file:text-xs file:font-medium"
+      />
+      <Button type="submit" variant="outline" size="sm" disabled={pending}>
+        {pending ? "Uploading…" : "Upload"}
+      </Button>
+      {error && <span className="text-sm text-destructive">{error}</span>}
     </form>
   );
 }
