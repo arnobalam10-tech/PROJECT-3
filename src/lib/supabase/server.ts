@@ -15,7 +15,13 @@ export async function createClient() {
         setAll(cookiesToSet) {
           try {
             for (const { name, value, options } of cookiesToSet) {
-              cookieStore.set(name, value, options);
+              // @supabase/ssr's own default is httpOnly: false (it supports a
+              // browser-client cookie-reading pattern this app doesn't use --
+              // src/lib/supabase/client.ts is unreferenced dead code, every
+              // Supabase call in this app goes through server actions/RSC).
+              // Force httpOnly so the session token is never readable by any
+              // injected client-side JS (§24 item 8).
+              cookieStore.set(name, value, { ...options, httpOnly: true });
             }
           } catch {
             // setAll called from a Server Component during render; the

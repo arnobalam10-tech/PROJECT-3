@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { sendEmailsForNewNotifications } from "@/lib/notifications";
+import { toSafeErrorMessage } from "@/lib/safe-error-message";
 
 export type ActionState = { error: string | null };
 
@@ -39,7 +40,7 @@ export async function submitMemo(
     p_workflow_template_id: workflowTemplateId,
   });
 
-  if (error) return { error: error.message };
+  if (error) return { error: toSafeErrorMessage(error, "submitMemo") };
   await dispatchEmails(memoId, sinceIso);
 
   revalidatePath(`/memos/${memoId}`);
@@ -65,7 +66,7 @@ export async function approveMemo(
     p_forward_to_user_id: forwardTo,
   });
 
-  if (error) return { error: error.message };
+  if (error) return { error: toSafeErrorMessage(error, "approveMemo") };
   await dispatchEmails(memoId, sinceIso);
 
   revalidatePath(`/memos/${memoId}`);
@@ -95,7 +96,7 @@ export async function declineMemo(
     p_comment: comment,
   });
 
-  if (error) return { error: error.message };
+  if (error) return { error: toSafeErrorMessage(error, "declineMemo") };
   await dispatchEmails(memoId, sinceIso);
 
   revalidatePath(`/memos/${memoId}`);
@@ -123,7 +124,7 @@ export async function rejectMemo(
     p_reason: reason,
   });
 
-  if (error) return { error: error.message };
+  if (error) return { error: toSafeErrorMessage(error, "rejectMemo") };
   await dispatchEmails(memoId, sinceIso);
 
   revalidatePath(`/memos/${memoId}`);
@@ -151,7 +152,7 @@ export async function requestChangesMemo(
     p_explanation: explanation,
   });
 
-  if (error) return { error: error.message };
+  if (error) return { error: toSafeErrorMessage(error, "requestChangesMemo") };
   await dispatchEmails(memoId, sinceIso);
 
   revalidatePath(`/memos/${memoId}`);
@@ -165,7 +166,7 @@ export async function resubmitMemo(memoId: string) {
   const sinceIso = new Date().toISOString();
   const supabase = await createClient();
   const { error } = await supabase.rpc("resubmit_memo", { p_memo_id: memoId });
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(toSafeErrorMessage(error, "resubmitMemo"));
   await dispatchEmails(memoId, sinceIso);
 
   revalidatePath(`/memos/${memoId}`);
@@ -192,7 +193,7 @@ export async function addGeneralComment(
     comment_type: "general",
   });
 
-  if (error) return { error: error.message };
+  if (error) return { error: toSafeErrorMessage(error, "addGeneralComment") };
   await dispatchEmails(memoId, sinceIso);
 
   revalidatePath(`/memos/${memoId}`);

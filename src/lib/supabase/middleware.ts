@@ -20,7 +20,10 @@ export async function updateSession(request: NextRequest) {
           }
           supabaseResponse = NextResponse.next({ request });
           for (const { name, value, options } of cookiesToSet) {
-            supabaseResponse.cookies.set(name, value, options);
+            // See src/lib/supabase/server.ts -- force httpOnly here too, since
+            // this is the other place that actually writes the session
+            // cookie into the response.
+            supabaseResponse.cookies.set(name, value, { ...options, httpOnly: true });
           }
         },
       },

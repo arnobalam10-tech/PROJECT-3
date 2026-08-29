@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { toSafeErrorMessage } from "@/lib/safe-error-message";
 
 export type ActionState = { error: string | null };
 
@@ -28,7 +29,7 @@ export async function createDelegation(
     p_reason: reason,
   });
 
-  if (error) return { error: error.message };
+  if (error) return { error: toSafeErrorMessage(error, "createDelegation") };
 
   revalidatePath("/delegations");
   return { error: null };
@@ -38,6 +39,6 @@ export async function revokeDelegation(delegationId: string) {
   await requireProfile();
   const supabase = await createClient();
   const { error } = await supabase.rpc("revoke_delegation", { p_delegation_id: delegationId });
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(toSafeErrorMessage(error, "revokeDelegation"));
   revalidatePath("/delegations");
 }

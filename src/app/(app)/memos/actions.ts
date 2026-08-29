@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { toSafeErrorMessage } from "@/lib/safe-error-message";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB, per PRD §12
 const BLOCKED_EXTENSIONS = [
@@ -106,7 +107,7 @@ export async function createDraft(
     .single();
 
   if (error || !memo) {
-    return { error: error?.message ?? "Could not create memo.", memoId: null };
+    return { error: error ? toSafeErrorMessage(error, "createDraft") : "Could not create memo.", memoId: null };
   }
 
   revalidatePath("/memos");
@@ -153,7 +154,7 @@ export async function updateDraft(
     .eq("id", memoId);
 
   if (error) {
-    return { error: error.message, memoId };
+    return { error: toSafeErrorMessage(error, "updateDraft"), memoId };
   }
 
   revalidatePath(`/memos/${memoId}`);
@@ -214,7 +215,7 @@ export async function uploadAttachment(memoId: string, formData: FormData) {
 
   if (rowError) {
     await supabase.storage.from("attachments").remove([storagePath]);
-    throw new Error(rowError.message);
+    throw new Error(toSafeErrorMessage(rowError, "uploadAttachment.row"));
   }
 
   revalidatePath(`/memos/${memoId}`);

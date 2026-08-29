@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireOrgAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { toSafeErrorMessage } from "@/lib/safe-error-message";
 
 export type InviteUserState = { error: string | null; success: string | null };
 
@@ -77,7 +78,7 @@ export async function inviteUser(
     // Roll back the orphaned auth user so a failed invite doesn't leave a
     // dangling account with no profile.
     await adminClient.auth.admin.deleteUser(invited.user.id);
-    return { error: profileError.message, success: null };
+    return { error: toSafeErrorMessage(profileError, "inviteUser.profile"), success: null };
   }
 
   revalidatePath("/admin/users");

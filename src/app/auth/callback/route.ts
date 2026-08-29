@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { toSafeErrorMessage } from "@/lib/safe-error-message";
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
@@ -33,7 +34,7 @@ export async function GET(request: NextRequest) {
       });
       if (rpcError) {
         return NextResponse.redirect(
-          `${origin}/login?error=${encodeURIComponent(rpcError.message)}`,
+          `${origin}/login?error=${encodeURIComponent(toSafeErrorMessage(rpcError, "auth.callback.create_organization_with_admin"))}`,
         );
       }
     }

@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { slugify } from "@/lib/slugify";
+import { toSafeErrorMessage } from "@/lib/safe-error-message";
 
 export type SignupState = { error: string | null; info: string | null };
 
@@ -57,7 +58,7 @@ export async function signup(
       admin_designation: designation || null,
     });
     if (rpcError) {
-      return { error: rpcError.message, info: null };
+      return { error: toSafeErrorMessage(rpcError, "signup.create_organization_with_admin"), info: null };
     }
     redirect("/dashboard");
   }

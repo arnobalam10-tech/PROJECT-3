@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireOrgAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { toSafeErrorMessage } from "@/lib/safe-error-message";
 
 export async function createTemplate(_prevState: { error: string | null }, formData: FormData) {
   const admin = await requireOrgAdmin();
@@ -30,7 +31,7 @@ export async function createTemplate(_prevState: { error: string | null }, formD
     .single();
 
   if (error) {
-    return { error: error.code === "23505" ? "A template with that name already exists." : error.message };
+    return { error: error.code === "23505" ? "A template with that name already exists." : toSafeErrorMessage(error, "createTemplate") };
   }
 
   const { error: positionsError } = await supabase.from("workflow_template_positions").insert(
@@ -46,7 +47,7 @@ export async function createTemplate(_prevState: { error: string | null }, formD
     // template behind — this table has no ON CONFLICT/upsert path, so a
     // partial failure here needs explicit rollback, not just a returned error.
     await supabase.from("workflow_templates").delete().eq("id", template.id);
-    return { error: positionsError.message };
+    return { error: toSafeErrorMessage(positionsError, "createTemplate.positions") };
   }
 
   revalidatePath("/admin/templates");

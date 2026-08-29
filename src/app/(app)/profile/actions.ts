@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { toSafeErrorMessage } from "@/lib/safe-error-message";
 
 export async function updateProfile(_prevState: { error: string | null }, formData: FormData) {
   const profile = await requireProfile();
@@ -19,7 +20,7 @@ export async function updateProfile(_prevState: { error: string | null }, formDa
     .update({ name, designation: designation || null })
     .eq("id", profile.id);
 
-  if (error) return { error: error.message };
+  if (error) return { error: toSafeErrorMessage(error, "updateProfile") };
 
   revalidatePath("/profile");
   revalidatePath("/dashboard");

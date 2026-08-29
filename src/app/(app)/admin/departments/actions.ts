@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireOrgAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { toSafeErrorMessage } from "@/lib/safe-error-message";
 
 export async function createDepartment(_prevState: { error: string | null }, formData: FormData) {
   const admin = await requireOrgAdmin();
@@ -21,7 +22,7 @@ export async function createDepartment(_prevState: { error: string | null }, for
   });
 
   if (error) {
-    return { error: error.code === "23505" ? "A department with that name already exists." : error.message };
+    return { error: error.code === "23505" ? "A department with that name already exists." : toSafeErrorMessage(error, "createDepartment") };
   }
 
   revalidatePath("/admin/departments");

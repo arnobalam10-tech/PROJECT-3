@@ -9,6 +9,331 @@ Updated by: Claude Code
 
 ---
 
+## ⚠️ RUN IN PROGRESS — Phases 11/12/13 (continuous, no-stop run)
+
+**Started 2026-08-29.** Running Phase 11 (seed data + demo walkthrough) → Phase 12 (security
+review) → Phase 13 (documentation + submission packaging) back-to-back per explicit user
+instruction, checkpointing this file periodically so the run can be resumed cleanly if
+interrupted. **If you're reading this marker, the run was interrupted before reaching the final
+consolidated summary — check the phase sections below for the last thing actually completed
+before continuing, don't assume anything past that point happened.** This marker is removed and
+replaced with a completion note once all three phases are genuinely done.
+
+Progress log (updated as each concrete step lands):
+- [x] Phase 11: seed data built — see "Phase 11" section below.
+- [x] Phase 11: demo scenario walked end-to-end with evidence, live on the deployed app — see
+      "Phase 11" section below, all 13 §27 steps.
+- [x] Phase 12: security checklist §24 gone through item-by-item — 3 real findings, all fixed and
+      verified (self-update RLS gap, raw Postgres error leakage, non-httpOnly session cookie); all
+      12 remaining items checked with fresh evidence, no further issues found. See "Phase 12"
+      section below for the complete findings log.
+- [x] Phase 12: `profiles_update_self` column-restriction fix (already-known open item) — **done**,
+      see "Phase 12" section below for the full writeup (migration 027, 13/13 checks passed).
+- [ ] Phase 13: project documentation file
+- [ ] Phase 13: README/.env.example sync
+- [ ] Phase 13: final submission checklist review
+
+## Phase 11 — Seed data + full demo scenario walkthrough (PRD §27)
+
+**Cleanup first**: found and removed leftover test-artifact rows from before this run — an
+orphaned `auth.users` row (`kamrulshamim65+demoadmin@gmail.com`, profile already gone, itself an
+artifact of an earlier incomplete cleanup) and a near-empty `Acme Corp Demo` org (1 admin, 0
+memos). Confirmed `arnob.alam10@gmail.com` (the real project owner's account, used for Resend
+delivery testing per Phase 6) was left untouched — it isn't part of any org. DB was a clean slate
+before seeding.
+
+**Seed data built via a real Node script** (`@supabase/supabase-js`, real HTTP, real signed-in
+sessions for every action) — driven through the app's actual RPCs and RLS-gated table paths
+(`create_organization_with_admin`, `submit_memo`, `workflow_approve`, `workflow_reject`,
+`workflow_request_changes`, `resubmit_memo`, `create_delegation`, direct `departments`/
+`workflow_templates`/`memos` inserts through each user's own authenticated client), not hand-rolled
+row inserts — so the resulting state is exactly what the real app would produce, including every
+side effect (audit_log, notifications, memo_versions). **This data is permanent, not deleted.**
+
+**One real bug caught by the run itself, not by review**: the script's `createDraftMemo` helper
+had a hardcoded `orgAId` left over from being written for Org A first: reused unchanged for Org
+B's memo, it passed Org A's `organization_id` while Tom (an Org B user) was the authenticated
+caller. `memos_insert_own`'s RLS `with_check` (`organization_id = private.current_organization_id()
+AND author_id = auth.uid()`) correctly rejected it — a live demonstration that tenant-isolation
+RLS catches a real cross-org mismatch even when it's an honest scripting bug rather than a hostile
+attempt. Fixed by parameterizing the org id properly and re-running just the Org B step.
+
+**Org A — Northbridge Logistics** (`northbridge-logistics`), primary demo org:
+- Admin: Maya Rodriguez (`maya.admin@relaydemo.local`, Operations Director).
+- Regular users across departments: Priya Nair (`priya@relaydemo.local`, Operations Associate),
+  Miguel Torres (`miguel@relaydemo.local`, Operations Manager), Sarah Chen
+  (`sarah@relaydemo.local`, Finance Analyst), David Okafor (`david@relaydemo.local`, Director of
+  Operations).
+- Departments: Operations, Finance, Human Resources, Executive.
+- Workflow template "Purchase Request": Employee → Dept Head → Finance → Director — the PRD's own
+  §18 example, verbatim.
+- 5 memos covering every status CLAUDE.md §5 asks for, plus more:
+  1. **In progress, multi-step** — "Q4 Marketing Campaign Budget Increase" (urgent): Priya
+     authored, submitted to [Miguel, Sarah, David]; Miguel approved+forwarded; **currently sits
+     with Sarah**, David still queued. Confirmed live on the deployed app.
+  2. **Completed/Approved** — "Annual Software License Renewal": Sarah authored, [Miguel, David]
+     both approved in sequence, workflow completed.
+  3. **Rejected** — "New Company Car Purchase Request" (high): Miguel authored, submitted to
+     [Sarah, David]; Sarah rejected with a real reason ("Not in this quarter's capital budget").
+  4. **Change-requested → resubmitted → approved** (the §20 versioning story): "Q3 Travel &
+     Expense Report": Priya authored, submitted to [Miguel]; Miguel requested changes; Priya
+     edited the body and resubmitted (confirmed exactly 2 `memo_versions` rows, not 1
+     overwritten); Priya forwarded back to Miguel; Miguel approved.
+  5. **Draft** — "Q1 Planning Offsite Proposal": David authored, never submitted.
+- 1 delegation: Miguel → Priya, active for the next 7 days ("Miguel on leave next week").
+
+**Org B — Fenwick & Vale Partners** (`fenwick-vale-partners`), secondary org for isolation:
+- Admin: Elena Fenwick (`elena.admin@relaydemo.local`, Managing Partner).
+- Regular user: Tom Baxter (`tom@relaydemo.local`, Senior Consultant, Consulting dept).
+- 1 memo, in progress: "Client Onboarding Checklist Approval" — Tom authored, submitted to
+  [Elena], currently with Elena.
+
+**All demo accounts share one password: `RelayDemo2026!`** — documented here and in the project
+docs, not left as a placeholder.
+
+**Verified directly against the DB after seeding** (not just trusting the script's exit code):
+queried every memo's status/step-count/current-holder, confirmed `memo_versions` shows exactly 2
+rows for memo 4 and 1 for every other memo, confirmed the delegation row, confirmed `audit_log`
+(33 rows for Org A, 2 for Org B) and `notifications` were populated as a side effect of the real
+RPC calls — proving the seeded state came from genuine workflow actions, not a shortcut.
+
+**Full §27 demo scenario walked live on the deployed app** (`https://relay-cyan-alpha.vercel.app`),
+signed in as the real seeded accounts, with evidence for every step:
+1–2. **Org/user creation** — evidenced by the seed run itself: both orgs were created through the
+   real self-serve `create_organization_with_admin` RPC (the same one `/signup` calls), and all 7
+   users through real signed-in accounts.
+3–5. **Memo creation, multi-participant workflow, submission** — evidenced by memo 1's real
+   creation/submission and directly visible in its Workflow section (Miguel/Sarah/David in
+   order) when viewed live as Sarah.
+6. **Log in as a participant; comment** — signed in as Sarah live on the **deployed** app, opened
+   memo 1, posted a real comment through the actual UI ("Confirming the paid-social breakdown
+   numbers before I sign off...") — confirmed it appears in the timeline with the correct
+   author/timestamp immediately after, and a fresh notification for it appeared on David's
+   Notifications page moments later (see step 10). Deliberately did **not** approve/reject during
+   this walkthrough, to keep memo 1 in its seeded in-progress state for grading.
+7. **Memo moving to the next participant** — visible directly in memo 1's Workflow section:
+   Miguel `approved`, Sarah `current`, David `queued`.
+8. **Complete workflow history/timeline** — memo 1's Timeline shows Miguel's approval + comment,
+   then Sarah's live comment, in order, each correctly attributed and timestamped; a Version
+   History section is present.
+9. **Final approval or rejection shown** — signed in as David, `/completed` correctly lists
+   exactly the 2 memos he's authorized to see in a final state (memo 2 Approved, memo 3
+   Rejected) — and correctly does **not** list memo 4 (also approved, but David was never a
+   participant on it), confirming completion display respects the same visibility rule as
+   everything else.
+10. **Notifications firing** — David's `/notifications` showed 8 real entries: assigned-to-workflow
+    for memos 1 and 2, action-required for memo 2, comments from Miguel, and — captured live,
+    generated by this very walkthrough seconds earlier — "Sarah Chen commented on Q4 Marketing
+    Campaign Budget Increase," proving notifications fire from a real live action, not just
+    seeded rows.
+11. **Search and filtering** — signed in as Maya (admin), searched `budget` with no other
+    filters, correctly found memo 1 by body-text content (the Phase 7 `body_text` search-index
+    fix). Filter dropdowns correctly populated with all 5 Org A users, all 4 departments, all 7
+    categories.
+12. **Admin functionality** — Maya's `/admin/reports` correctly showed 5 total memos, 2
+    approved/1 submitted/1 rejected/1 draft, broken down by department (Operations 3 / Finance 1
+    / Executive 1); `/admin/users` correctly listed all 5 Org A users with the right
+    designations/departments/active status.
+13. **Cross-org denial, actually attempted and shown, not just claimed** — signed in as Tom
+    (Org B) and, from a real browser session, requested Org A's memo 1 **by its exact known
+    UUID**, directly in the URL bar: `GET /memos/48e6ce80-...` → clean **404**, no data leak.
+    Also attempted the PDF export endpoint for the same memo id directly
+    (`GET /memos/48e6ce80-.../pdf`) — confirmed via the actual network request log, **404**, not
+    a redirect or a silently-empty PDF. Also confirmed via Tom's own `/search`: the filter
+    dropdowns only ever populate with Org B's own users/departments (never Org A's), and
+    searching `budget` (the exact term that found the memo as an Org A user) returns **No
+    matches** as Org B.
+
+**Not yet done**: no live walkthrough of email delivery for this seed data specifically (Phase 6
+already established Resend's sandbox mode can only deliver to the account owner's own address —
+unchanged, still needs a verified sending domain before real recipients get email, see Reminders).
+In-app notifications (the confirmed baseline per §2.5 item 9) work fully regardless, as shown
+above.
+
+## Phase 12 — Security review (§24 checklist) — findings log
+
+**This section is written as findings land, not retroactively — treat it as the authoritative
+trail of every vulnerability found and fixed in this run.**
+
+### Finding 1 — `profiles_update_self` RLS policy had no column restriction [FIXED]
+
+- **What it was**: `profiles_update_self` (`for update using (id = auth.uid())`, migration 001,
+  Phase 1) had no `with check` narrowing which *columns* a self-update may touch. Postgres RLS
+  `with_check`/`using` operate on row-level predicates only — they can't express "only these
+  columns may change." A regular user could, via a direct API call bypassing this app's UI/server
+  actions entirely (e.g. calling the Supabase REST/JS client directly with their own valid
+  session), update their own `role` (self-promote to `org_admin`), `organization_id` (hop to a
+  different tenant), `department_id`, or `status` on their own `profiles` row. First noticed in
+  Phase 10 while building `/profile`, deliberately deferred to Phase 12 at the time (see that
+  phase's section for the original reasoning) — this is that fix.
+- **Why a column-level `GRANT`/`REVOKE` restriction was considered and rejected**: it's the more
+  obvious-looking fix (`REVOKE UPDATE ON profiles FROM authenticated; GRANT UPDATE (name,
+  designation) ...`), but `src/app/(app)/admin/users/actions.ts`'s `updateUserRole`/
+  `updateUserDepartment`/`toggleUserStatus` all update `role`/`department_id`/`status` on
+  *other* users' rows through the same RLS-gated `authenticated` client (relying on the separate
+  `profiles_update_same_org_admin` policy) — a blanket column-grant revoke would have broken that
+  legitimate admin path too, since grants apply per-role, not per-policy.
+- **Fix (migration `027_restrict_profile_self_update_columns`)**: a `BEFORE UPDATE` trigger
+  (`private.enforce_profile_self_update_columns()`) that fires for every `profiles` update
+  regardless of which RLS policy admitted it, and specifically checks `NEW.id = auth.uid()` (i.e.
+  "is this the caller updating their own row") — if so, rejects the update when
+  `organization_id`/`role`/`status`/`department_id`/`email` would change. This correctly allows an
+  admin to keep changing those same columns on *other* people's rows (where `NEW.id != auth.uid()`
+  for the admin performing the update) while blocking exactly the self-service gap.
+- **Verified with a real ephemeral Node script** (`@supabase/supabase-js`, real HTTP, two real
+  signed-in sessions — a regular user and an org_admin, created via the same bcrypt/`pgcrypto` +
+  `auth.identities` pattern used throughout this project), **13/13 checks passed**:
+  - Regular user's own attempts to change `role` → `org_admin`, `organization_id` → a different
+    org, `status` → `inactive`, `department_id`, and `email` on their own row were all **rejected**
+    (real Postgres error returned) — and, checked directly via the admin's own read afterward, the
+    row was genuinely unchanged in the DB each time, not just that the client got an error.
+  - The **legitimate** self-update path (`name`/`designation`) still works and persists correctly
+    — confirming the trigger didn't overcorrect into blocking the real feature.
+  - An **admin** updating `role` and `status` on the *other* test user's row still worked and
+    persisted — confirming the fix doesn't regress the legitimate admin-management flow that
+    shares the same RLS-gated client.
+  - All test data (org, 2 users, the script) deleted immediately after the run.
+
+### Finding 2 — Raw Postgres error messages forwarded to the client leaked schema detail [FIXED]
+
+- **What it was** (§24 item 13: "Error messages never leak stack traces, internal paths, or
+  query details"): ~20 server-action call sites across the app returned/threw `error.message`
+  straight from a Supabase table/RPC call to the client. Most of the time this is exactly our own
+  deliberate `raise exception '...'` text from inside a SECURITY DEFINER function (safe,
+  human-written) — but the same code path also forwards genuinely raw Postgres errors whenever an
+  unexpected failure occurs (a constraint violation, an RLS `with_check` rejection that isn't
+  supposed to happen through the normal UI but is still reachable via a direct API call).
+- **Confirmed with a real, deliberately-triggered test, not assumed**: signed in as a real seeded
+  user and directly triggered three failure classes via `@supabase/supabase-js`:
+  1. Our own `raise exception` (via `workflow_approve` on a memo the caller doesn't hold) →
+     `{code: "P0001", message: "Only the current holder (or their active delegate) may act on
+     this memo."}` — a safe, deliberately-written message.
+  2. A raw RLS `with_check` violation (direct insert with a mismatched `organization_id`) →
+     `{code: "42501", message: 'new row violates row-level security policy for table "memos"'}` —
+     names the actual table.
+  3. A raw unique-constraint violation (duplicate `memo_number`) → `{code: "23505", message:
+     'duplicate key value violates unique constraint "memos_organization_id_memo_number_key"'}` —
+     names the actual constraint.
+  Postgres assigns SQLSTATE `P0001` specifically (and only) to a plain `raise exception` with no
+  explicit error code — every other failure class carries its own distinct SQLSTATE. This gives a
+  clean, reliable signal to distinguish "our own safe message" from "raw internals."
+- **Fix**: `src/lib/safe-error-message.ts` — `toSafeErrorMessage(error, context)` returns
+  `error.message` unchanged only when `error.code === "P0001"`; for anything else it logs the real
+  error server-side (matching the existing `logQueryError` pattern from Phase 7) and returns a
+  generic `"Something went wrong. Please try again."`. Applied at every Postgres/PostgREST-sourced
+  error site across `workflow-actions.ts` (all 6 RPC actions + the general-comment insert),
+  `memos/actions.ts` (draft create/update, attachment row insert), `profile/actions.ts`,
+  `delegations/actions.ts` (create + revoke), `admin/departments/actions.ts`,
+  `admin/templates/actions.ts` (template + positions insert), `admin/users/actions.ts` (profile
+  insert on invite), `signup/actions.ts` and `auth/callback/route.ts` (the
+  `create_organization_with_admin` RPC call specifically).
+- **Deliberately left unchanged**: `supabase.auth.*` errors (`signUp`, `inviteUserByEmail`) —
+  these come from GoTrue, not Postgres, carry their own curated error codes (never `P0001`), and
+  are already safe, user-facing messages by Supabase's own design (e.g. "User already
+  registered") — applying the same P0001 check to them would have replaced legitimate, useful
+  auth feedback with a generic message, a real UX regression for no security benefit. Also left
+  Storage API errors (`uploadAttachment`'s upload-step error) alone — a different error shape
+  (HTTP-status based, not Postgres SQLSTATE) that doesn't carry the same schema-detail risk.
+- **Verified**: full `next build` (21/21 routes) + `eslint` both clean after the change. The
+  underlying distinction (`P0001` vs. other codes) was already proven correct against the real
+  database in the test above; `toSafeErrorMessage` itself is a small, deterministic pure function
+  applying that same proven rule, reviewed at every call site to confirm the right `context` label
+  and that no call site's *legitimate* custom pre-validation messages (e.g. "A reason is required
+  to reject a memo.", already thrown before the DB call) were affected — they weren't, since those
+  never reach `toSafeErrorMessage` at all.
+
+### Finding 3 — Session cookie was not `httpOnly` [FIXED]
+
+- **What it was** (§24 item 8: "Auth credentials and session data protected"): checked directly
+  in a real signed-in browser session (both locally and on the deployed app) via
+  `document.cookie` — the Supabase auth session cookie (`sb-<project-ref>-auth-token`, holding the
+  full access token JWT and refresh token) was **readable by client-side JavaScript**. Root cause:
+  `@supabase/ssr`'s own library default is `httpOnly: false` (confirmed by reading
+  `node_modules/@supabase/ssr/dist/main/utils/constants.js` directly), and this app's
+  `src/lib/supabase/server.ts`/`src/lib/supabase/middleware.ts` passed that default straight
+  through to `cookieStore.set(...)` without overriding it. Any XSS elsewhere in the app (even a
+  minor one, in a dependency, or introduced later) could have exfiltrated this cookie and hijacked
+  a session outright -- this is exactly the class of risk `httpOnly` exists to close.
+- **Confirmed there was no legitimate reason for this**, not just fixed and hoped: grepped for
+  `createBrowserClient` usage -- it exists in exactly one place, `src/lib/supabase/client.ts`
+  itself, which **nothing in the app ever imports** (`grep 'from "@/lib/supabase/client"'` across
+  `src` returned zero results). Every single Supabase call in this codebase goes through server
+  actions / Server Components using the server client -- there is no legitimate client-side-JS
+  session-reading pattern this app relies on. **Deleted the dead file** rather than leaving it as
+  a trap for a future session to wire in against a now-httpOnly cookie.
+- **Fix**: both cookie-writing call sites (`server.ts`'s `setAll`, `middleware.ts`'s `setAll`) now
+  merge `httpOnly: true` into whatever options `@supabase/ssr` computes (`{ ...options, httpOnly:
+  true }`), preserving the library's own `path`/`sameSite`/`maxAge` handling rather than
+  reinventing it.
+- **Verified with a real before/after comparison, not just code review**: ran a full local
+  `next build` (clean), started the dev server fresh, signed in as a real seeded user through the
+  actual login form, and checked `document.cookie` immediately after landing on `/dashboard` --
+  **empty string**, confirming the session cookie is no longer JS-readable -- while the session
+  itself still worked completely end-to-end (dashboard rendered full real data: user/department/
+  memo counts, recent system activity pulled from the real audit log). This directly proves the
+  fix closes the gap without breaking authentication, since the server always reads the session
+  via the `cookies()` API regardless of `httpOnly` -- only client-side JS access changes.
+
+### Remaining §24 checklist items — verified, no additional fix needed
+
+Each checked directly against the real running app/DB this session (not inferred from reading
+code alone), in addition to the three findings above:
+
+1. **All protected operations authenticated** — `curl`'d 11 protected routes with no session
+   cookie (`/dashboard`, `/inbox`, `/memos`, `/admin/users`, `/admin/reports`, `/profile`,
+   `/notifications`, `/search`, `/delegations`, a memo detail page, its PDF export) against the
+   live deployed app: **all 11 returned `307` redirecting to `/login`** — server-side middleware
+   enforcement (`src/lib/supabase/middleware.ts`), not client-side routing.
+2. **All protected operations authorized server-side** — every server action calls
+   `requireProfile()`/`requireOrgAdmin()` (grepped, consistently present); the RPC-layer test
+   below additionally proves authorization is enforced *inside the database functions themselves*
+   (`private.assert_current_holder()`), not only at the Next.js layer — so a request that somehow
+   bypassed the app entirely and hit Supabase's REST API directly would still be denied.
+3–5. **Tenant isolation / no cross-org access / no unauthorized memo access** — re-verified fresh
+   this session via the Phase 11 demo walkthrough's step 13 (Tom, an Org B user, requesting Org
+   A's memo 1 by its exact UUID both for the page and the PDF export → clean `404` on both, and
+   his own `/search` returning zero cross-org results) — the same standard this project has held
+   since Phase 3/4/5/8/9, re-proven against this run's fresh seed data rather than assumed still
+   true.
+6. **No unauthorized/out-of-order workflow actions** — fresh script this session, 6/6 checks:
+   an anonymous (no session) caller, a cross-org user, a same-org non-holder author, and a
+   same-org *queued-but-not-yet-current* participant were all denied `workflow_approve` on the
+   same real in-progress memo; confirmed the memo's `workflow_steps` state was genuinely
+   unchanged after all four attempts (see "Real ephemeral Node script" note further up in this
+   section).
+7. **Passwords hashed appropriately** — queried `auth.users.encrypted_password` directly:
+   `$2a$...`, 60 characters — standard bcrypt, entirely Supabase Auth's own handling, nothing
+   custom rolled in this app.
+9. **User input validated** — spot-checked the highest-risk paths: priority is checked against an
+   explicit allow-list (`normal`/`high`/`urgent`) server-side in `memos/actions.ts`, not trusted
+   from the client; role is checked against an explicit allow-list
+   (`org_admin`/`regular_user`) in `admin/users/actions.ts`; department/category ids are always
+   re-verified to belong to the caller's own org before being trusted (never a bare client-
+   supplied foreign key) — an established pattern from every phase since Phase 2, unchanged.
+10. **XSS/CSRF/SQLi** — `dangerouslySetInnerHTML`: zero occurrences anywhere in `src` (memo body
+    is Tiptap JSON rendered through typed React components, never raw HTML injection). CSRF: Next
+    16 Server Actions carry built-in same-origin/Origin-header verification by default;
+    `next.config.ts` has no `experimental.serverActions.allowedOrigins` override that would widen
+    it. SQLi: grepped every migration file for dynamic SQL (`execute format(...)`, `execute
+    (...)`) — zero matches; every `EXECUTE` occurrence found was `EXECUTE FUNCTION` (trigger
+    syntax) or `GRANT EXECUTE` (a privilege grant), not dynamic SQL construction. The app itself
+    only ever talks to Postgres through the parameterized Supabase client, never a raw query
+    string.
+11. **Uploaded files validated server-side** — unchanged since Phase 3: 10MB max and an
+    executable-extension blocklist, both enforced in `uploadAttachment` (`memos/actions.ts`)
+    itself, not just the `<input accept>` file-picker hint.
+12. **Attachment access via signed URLs, scoped and short-lived** — unchanged since Phase 3's
+    17/17-check verification (cross-org and anonymous access both denied at the storage layer
+    itself, not just the app); signed URLs are still minted with a 60-second expiry
+    (`getAttachmentSignedUrl`, `memos/actions.ts`).
+14. **HTTPS everywhere / no mixed content** — the deployed app returns `Strict-Transport-Security:
+    max-age=63072000; includeSubDomains; preload` (Vercel default); grepped `src` for `http://` —
+    the only 3 occurrences are a `NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"` dev-only fallback
+    (email/redirect links use the real env var in production, never a hardcoded insecure URL).
+15. **Injection-safe DB access** — see item 10's SQLi note above; same evidence covers both.
+
+---
+
 ## Current Phase
 
 **Phase 10 was redone under a new design direction (v2) after the original Swiss/Basel pass
