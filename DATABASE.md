@@ -13,11 +13,48 @@ ad hoc dashboard edits — migrations are part of the graded source-code submiss
 2. RLS enabled, with a policy like:
    ```sql
    create policy "tenant_isolation_select" on <table>
-     for select using (organization_id = (select organization_id from profiles where id = auth.uid()));
+     for select using (organization_id = private.current_organization_id());
    ```
    Mirror for insert/update/delete, plus role-based restrictions where needed (e.g. only admins
-   can write to `departments`).
+   can write to `departments`, via `private.current_role() = 'org_admin'`).
 3. Server-side re-verification of `organization_id` in the API route/server action on top of RLS.
+
+   **Do NOT write the naive version of this** —
+   `organization_id = (select organization_id from profiles where id = auth.uid())` — on ANY
+   table, including `profiles` itself. That subquery targets `profiles`, which is itself
+   RLS-protected by this exact same policy pattern, so the subquery can never resolve (it has no
+   way to "see" its own row without already knowing the answer). The practical effect: **every
+   user is silently locked out of reading even their own profile row**, which cascades into every
+   other table's policy too, since they all resolve a user's org via a `profiles` lookup. This
+   was actually built this way in the first migration (`20260829040558`) and caused a real,
+   fully-reproduced bug — an infinite `/login` ↔ `/dashboard` redirect loop — before being caught
+   and fixed in migrations `20260829041858` / `20260829041913` (see `STATUS.md` Known
+   Bugs/Decisions for the full story). Always resolve the caller's own org/role via the
+   `private.current_organization_id()` / `private.current_role()` SECURITY DEFINER functions
+   below instead — they bypass RLS for that one narrow, safe lookup (same trick Postgres/Supabase
+   docs recommend for exactly this recursion problem), and are only usable *from inside* a policy
+   or function (granted to `authenticated` for policy evaluation, not exposed via PostgREST since
+   they live in the `private` schema).
+
+   ```sql
+   create schema if not exists private;
+
+   create function private.current_organization_id() returns uuid
+   language sql security definer stable set search_path = '' as $$
+     select organization_id from public.profiles where id = auth.uid();
+   $$;
+
+   create function private.current_role() returns user_role
+   language sql security definer stable set search_path = '' as $$
+     select role from public.profiles where id = auth.uid();
+   $$;
+
+   grant execute on function private.current_organization_id() to authenticated;
+   grant execute on function private.current_role() to authenticated;
+   ```
+
+   `profiles`' own `id = auth.uid()` policies (e.g. "update your own profile") are fine as-is —
+   there's no self-referential subquery there, just a direct comparison.
 
 ## Core entities
 
@@ -84,6 +121,26 @@ message, is_read, created_at`
 via the API; only a service-role backend process may write)
 `id, organization_id, event_type, user_id, related_entity_type, related_entity_id,
 description, created_at`
+
+## Migrations applied so far
+
+See `supabase/migrations/` for the actual SQL (kept in sync with what's live in the Supabase
+project). As of this note:
+
+1. `20260829040558_001_organizations_and_profiles` — `organizations`, `profiles`, enums, RLS,
+   `create_organization_with_admin()` bootstrap RPC.
+2. `20260829040613_002_restrict_create_org_function` — lock the bootstrap RPC's EXECUTE grant to
+   `authenticated` only.
+3. `20260829041842_003_departments` — `departments` table + RLS, backfills the deferred
+   `profiles.department_id` FK.
+4. `20260829042610_004_fix_rls_self_reference` — introduces `private.current_organization_id()` /
+   `private.current_role()`, rewrites every policy that used to self-reference `profiles`. **Bug
+   fix**, see the warning under "Tenant isolation pattern" above.
+5. `20260829042744_005_fix_helper_function_grants` — the first attempt at #4 also revoked
+   `authenticated`'s own EXECUTE on those two helper functions, which broke RLS evaluation
+   entirely (nobody could read anything). This migration re-grants EXECUTE to `authenticated`.
+   **Also a bug fix** — see `STATUS.md` for how it was caught (a direct SQL repro using
+   `set_config('request.jwt.claims', ...)` to simulate an authenticated request).
 
 ## Notes for Claude Code
 

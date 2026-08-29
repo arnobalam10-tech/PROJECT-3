@@ -1,0 +1,69 @@
+import { requireOrgAdmin } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/server";
+import { InviteUserForm } from "./invite-user-form";
+import { UserRowControls } from "./user-row-controls";
+
+export default async function UsersPage() {
+  const admin = await requireOrgAdmin();
+  const supabase = await createClient();
+
+  const [{ data: users }, { data: departments }] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("id, name, email, designation, role, status, department_id, departments(name)")
+      .eq("organization_id", admin.organization_id)
+      .order("name"),
+    supabase
+      .from("departments")
+      .select("id, name")
+      .eq("organization_id", admin.organization_id)
+      .eq("status", "active")
+      .order("name"),
+  ]);
+
+  return (
+    <main className="mx-auto max-w-5xl">
+      <h1 className="mb-8 text-3xl font-bold lowercase tracking-tight">users</h1>
+      <InviteUserForm departments={departments ?? []} />
+      <table className="w-full border-collapse text-sm">
+        <thead>
+          <tr className="border-b border-black text-left text-xs uppercase tracking-wide text-neutral-500">
+            <th className="py-2">Name</th>
+            <th className="py-2">Email</th>
+            <th className="py-2">Designation</th>
+            <th className="py-2">Status</th>
+            <th className="py-2">Role / Department</th>
+          </tr>
+        </thead>
+        <tbody>
+          {(users ?? []).map((u) => (
+            <tr key={u.id} className="border-b border-neutral-300 align-middle">
+              <td className="py-3 font-medium">{u.name}</td>
+              <td className="py-3 text-neutral-600">{u.email}</td>
+              <td className="py-3 text-neutral-600">{u.designation ?? "—"}</td>
+              <td className="py-3">
+                <span
+                  className={`text-xs font-medium uppercase tracking-wide ${
+                    u.status === "active" ? "text-black" : "text-neutral-500"
+                  }`}
+                >
+                  {u.status}
+                </span>
+              </td>
+              <td className="py-3">
+                <UserRowControls
+                  userId={u.id}
+                  role={u.role}
+                  status={u.status}
+                  departmentId={u.department_id}
+                  departments={departments ?? []}
+                  isSelf={u.id === admin.id}
+                />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </main>
+  );
+}
