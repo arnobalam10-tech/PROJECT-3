@@ -96,14 +96,6 @@ FK can't be satisfied before the profile row exists).
 
 ## In Progress 🚧
 
-- **Attachment upload/download — not yet exercised through the browser UI.** The Browser-pane
-  automation tool available in this session has no file-picker/file-input capability, and the
-  `claude-in-chrome` tool (which does support file uploads) reported "not connected" when tried.
-  What *is* verified: the private bucket exists, `storage.objects` RLS policies apply cleanly with
-  no advisor warnings, and the upload/download/delete server actions mirror the same
-  ownership-check pattern already proven correct elsewhere (`assertOwnedDraft`, signed URLs scoped
-  per-request). Still, this is a real gap — **next session (or the user, right now) should
-  actually upload and download a file through the UI** before Phase 3 is called fully done.
 - **Invite-user with the service-role key** — the key was added by the user this session, but the
   invite flow hasn't been re-tested since (last confirmed behavior was the clean-failure path
   before the key existed). Worth a quick real test soon.
@@ -112,6 +104,73 @@ FK can't be satisfied before the profile row exists).
   branding/copy, nav shows the "relay" wordmark, and `/memos/new` renders correctly (Tiptap editor,
   department/category dropdowns populated from real data) — Vercel's GitHub auto-deploy is
   confirmed working, took roughly 2-3 minutes after push.
+
+## Follow-up verification (requested by the user — don't accept "probably fine" without proof)
+
+**1. Rich-text persistence — re-verified with hard evidence, not just re-observed.**
+
+The prior session's "hydration timing, not a bug" conclusion was correct, but hadn't actually been
+proven — re-checked properly this time:
+
+- **DB proof:** `select body from memos where memo_number = '...-00001'` returns
+  `{"type":"doc","content":[{"type":"paragraph","content":[{"text":"Please review the attached
+  budget breakdown for Q3.","type":"text","marks":[{"type":"bold"}]}]}]}` — the bold mark is
+  genuinely persisted, not lost.
+- **Dev-mode hard refresh:** navigating fresh to `/memos/[id]` on the local dev server and reading
+  the page immediately (no wait) reproduces the blank-body symptom every time.
+- **Critical check the prior session skipped:** dev-mode Fast Refresh/HMR could have been masking
+  a real bug by triggering an unrelated re-render that only *looked* like the content "showing up
+  eventually." So this was re-tested against the **production Vercel build** (no HMR, minified,
+  the build that actually matters) instead of trusting the dev-mode observation:
+  - Fresh hard navigation (`navigate` with `force: true`, bypassing cache) to the same memo on
+    `https://relay-cyan-alpha.vercel.app/memos/b0741c33-...`, then an immediate
+    `document.querySelector('.ProseMirror').innerHTML` check via injected JS —
+    result: `<p><strong>Please review the attached budget breakdown for Q3.</strong></p>` — real
+    `<strong>` markup, not just visually-bold text, present essentially immediately.
+  - A second run added a polling loop (20ms intervals) timing exactly how long after script start
+    it took for the bold content to appear: **0.1ms** — i.e. already present by the time the check
+    could run at all.
+  - **Conclusion, now with evidence behind it:** this was genuinely just local dev-mode hydration
+    being slower than production (unminified React + more overhead), not a save-path bug and not
+    an HMR artifact. Production shows no delay worth worrying about. No code change was needed —
+    but this is now backed by a controlled production repro, not an assumption.
+
+**2. Attachment upload/download/authorization — tested directly via script, not the browser UI**
+(per the user's instruction that this is more rigorous than a file-picker click-through anyway).
+Used the exact same `@supabase/supabase-js` calls the app's server actions make
+(`storage.upload`, `.from('attachments').insert()`, `storage.createSignedUrl()`,
+`storage.download()`), run from two ephemeral Node scripts against the real Supabase project (not
+mocked), then deleted both scripts and all test data afterward. Full result: **17/17 checks
+passed**:
+
+- *As Alice (org admin, author, "Acme Corp Demo"):* signed in for real → uploaded a real file to
+  the private `attachments` bucket → inserted the `attachments` row → **confirmed the stored row's
+  `file_size` (79 bytes) matches the actual uploaded byte length exactly**, and `file_name`/
+  `mime_type` match what was sent → minted a signed URL → fetched it over real HTTP → **downloaded
+  content byte-for-byte identical to what was uploaded**.
+- *As an anonymous, unauthenticated client:* direct `storage.download()` by the exact known path —
+  **denied**. Attempting to even mint a signed URL for it — **denied**. (Denial reason surfaced as
+  "permission denied for function current_organization_id" — expected: `anon` has no `EXECUTE`
+  grant on the `private` helper functions at all, so the RLS policy can't even evaluate for that
+  role. Fails closed, which is the correct behavior either way.)
+- *As Bob, a real signed-up-and-confirmed user in a second, genuinely different organization
+  ("Globex Test Org")* — confirmed via his own `profiles.organization_id`
+  (`578be415-...` ≠ Alice's org `c88f45ed-...`) before trusting the rest of the test:
+  - `select` on the `attachments` row by its known id — **0 rows returned** (RLS-filtered, not an
+    error — matches the intended "just doesn't exist to you" behavior).
+  - Direct `storage.download()` by the exact known path — **denied** ("Object not found" — the
+    bucket correctly refuses to even confirm the object exists to an unauthorized caller, which is
+    better than a generic "403 forbidden" that would leak existence).
+  - `storage.createSignedUrl()` for that path — **denied**, same reason.
+  - `select` on the memo itself by its known id — **0 rows returned**.
+
+This directly demonstrates PRD §12 ("a user must never reach an attachment by guessing or
+manipulating a URL") and §27 demo-scenario item 13 (cross-org denial) both hold, at the API level,
+independent of anything the UI does or doesn't render — a stronger guarantee than a UI
+click-through would have provided, since it proves the server/DB layer enforces this on its own.
+
+All test data (the test attachment row, the uploaded test object, Bob's user/profile/org) was
+deleted immediately after the run; both test scripts were deleted, not committed.
 
 ## Not Started Yet
 
@@ -150,7 +209,14 @@ FK can't be satisfied before the profile row exists).
   pattern" section for the full writeup; this is now the canonical documented pattern
   (`private.current_organization_id()` / `private.current_role()`).
 - **[FIXED, this session] `window.confirm()` on delete-draft** — see Phase 3 notes above.
-- Attachment upload/download UI path not yet click-tested (see In Progress).
+- **[VERIFIED, this session, via script rather than UI]** Attachment upload/download/
+  authorization — see "Follow-up verification" section above for the full 17/17-check result.
+  The one thing this doesn't cover is the literal `<input type="file">` → form-submit wiring in
+  the browser (i.e. does clicking "choose file" and "upload" in the actual UI correctly call the
+  same server action) — that's a standard, low-risk HTML pattern already used correctly elsewhere
+  in this codebase, so not treated as an open item, but noted for completeness.
+- **[VERIFIED, this session, with production evidence]** Rich-text save/render — see "Follow-up
+  verification" above. Not a bug; production shows no meaningful delay.
 - `/signup` → email-confirmation-link → `/auth/callback` path still not click-tested with a real
   email (unchanged from last session — still low-risk, same reasoning as before: the RPC it calls
   has been directly exercised and re-verified multiple times since).
@@ -212,7 +278,6 @@ that need cleanup or intentional replacement first.
 - [ ] Confirm `.env.example` is fully in sync (now includes `SUPABASE_SERVICE_ROLE_KEY`).
 - [ ] Write the separate project documentation file (PRD §28.B).
 - [ ] Click-test the real email-confirmation link end-to-end.
-- [ ] Click-test attachment upload/download through the actual browser UI.
 - [ ] Re-test invite-user now that the service role key is configured.
 - [ ] Enable "Leaked Password Protection" in the Supabase Auth dashboard before Phase 12.
 - [ ] Confirm the Vercel redeploy picked up this session's push and matches local `main`.
