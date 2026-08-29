@@ -190,7 +190,15 @@ export default async function MemoDetailPage({ params }: { params: Promise<{ id:
           </p>
           <h1 className="text-3xl font-bold lowercase tracking-tight">{memo.subject}</h1>
         </div>
-        {isDraftEditable && <DeleteDraftButton memoId={memo.id} />}
+        <div className="flex items-center gap-3">
+          <a
+            href={`/memos/${memo.id}/pdf`}
+            className="border border-black px-3 py-1.5 text-xs font-medium uppercase tracking-wide"
+          >
+            export pdf
+          </a>
+          {isDraftEditable && <DeleteDraftButton memoId={memo.id} />}
+        </div>
       </div>
 
       {isEditable ? (

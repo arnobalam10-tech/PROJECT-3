@@ -4,15 +4,14 @@
 rules. It is the source of truth for "what's the current state of the project" — more reliable
 than memory of prior sessions. Be precise and honest; "mostly done" is not an acceptable status.
 
-Last updated: 2026-08-29 (Phase 8 session)
+Last updated: 2026-08-29 (Phase 9 session)
 Updated by: Claude Code
 
 ---
 
 ## Current Phase
 
-Phase 8 (Templates, delegation, versioning, audit log — PRD §18/§19/§20/§21) — done. Moving into
-Phase 9 (PDF export) next.
+Phase 9 (PDF export — PRD §23) — done. Moving into Phase 10 (design pass) next.
 
 ## Done ✅
 
@@ -663,6 +662,99 @@ authorized participant, not just present in the DB**:
   "who currently holds this memo"), just ownership and org scoping, so the extra indirection
   wasn't warranted.
 
+## Phase 9 — PDF export (PRD §23).
+
+**Library choice, per `CLAUDE.md`'s "pick one, record the choice" instruction**: `@react-pdf/renderer`
+was already present in `package.json` (installed in an earlier session, apparently in anticipation
+of this phase, but never actually used anywhere — confirmed via a full-codebase grep before relying
+on it). Chosen over `pdf-lib` because it composes a document declaratively as
+React/JSX (`Document`/`Page`/`View`/`Text`, Yoga-flexbox layout) rather than imperative
+coordinate-based drawing, which matches this codebase's existing React-heavy style and made a
+structured, multi-section document (org info, meta grid, body, attachments, workflow history,
+comments) straightforward to lay out correctly on the first pass.
+
+**Built**:
+- `src/lib/pdf/tiptap-to-pdf.tsx` — walks the same Tiptap JSON stored in `memos.body` into
+  `@react-pdf` elements. Deliberately does **not** reuse `body_text` (the Phase 7 search-only
+  plain-text mirror, which flattens all `"text"` nodes with no paragraph/list structure) — the
+  export needs to look like the actual memo, not a search index, so it walks `body` directly:
+  paragraphs, `bulletList`/`orderedList` with real bullet/number markers, bold/italic marks, and a
+  fallback that flattens any node type not reachable through the editor's toolbar (so nothing
+  from a hypothetical API-inserted node silently disappears).
+- `src/lib/pdf/memo-document.tsx` — the actual document layout: org name, memo number, subject, a
+  status badge (mapped from the full `memo_status` enum down to a human label — §23 names
+  "approved / rejected / in progress" as the three canonical buckets, but the app has more granular
+  in-flight statuses; all of `submitted`/`pending_review`/`pending_approval`/`changes_requested`
+  collapse to "In Progress" rather than inventing a 4th bucket, `changes_requested` gets a
+  sub-label appended since that's a meaningfully different in-progress state), author + email,
+  department, category, priority, created/submitted/completed dates, body, attachments (file name
+  + size only — no signed URLs or file content embedded, matching §23's "attachment references"
+  wording and never exposing storage paths per `CLAUDE.md`'s attachment rule), workflow
+  participants with approval history (holder, resolution status, action taken, timestamp, comment,
+  and delegate dual-attribution — "acted by X on behalf of Y" — reusing Phase 8's
+  `acted_by`/`on_behalf_of_user_id` columns), and comments (author, on-behalf-of, type, timestamp,
+  body). Colors follow `DESIGN.md`'s palette: near-black ink, muted gray for meta text, the single
+  red accent reserved for Rejected status specifically (same convention already used for urgent
+  priority elsewhere in the app) — not a full Phase-10 design pass, just enough to not clash with
+  it later.
+- `src/app/(app)/memos/[id]/pdf/route.ts` — a GET Route Handler (Next 16 App Router, same pattern
+  as the existing `auth/callback/route.ts`) that fetches the memo via the caller's own
+  RLS-scoped client (same authorization the memo detail page already relies on), **re-checks
+  `memo.organization_id === profile.organization_id` explicitly** rather than trusting RLS alone
+  (`CLAUDE.md` §4), fetches attachments/workflow_steps/comments, assembles the data, renders via
+  `renderToBuffer`, and returns it with `Content-Disposition: attachment` so it downloads as
+  `<memo_number>.pdf`.
+- An "export pdf" link on the memo detail page header, next to delete-draft, visible to anyone who
+  can view the page at all — §23 doesn't restrict export more narrowly than view access, and
+  nothing in this codebase's authorization model draws that distinction elsewhere either.
+
+**A second "package I assumed vs. package that's actually there" moment worth noting**: while
+inspecting `package.json` at the start of this phase, a debug `console.log` briefly made it look
+like a *different*, unrelated package (`react-pdf`, a PDF *viewer* wrapper around PDF.js — easy to
+confuse by name with `@react-pdf/renderer`, a PDF *generator*) might have been installed instead
+of the right one. Re-checked directly with `Object.keys(require('@react-pdf/renderer'))` against
+the actual installed package before writing any code — it was the correct one all along; the
+mix-up was in my own mislabeled console output, not in the dependency tree. Worth a beat of
+paranoia given `react-pdf` is genuinely unused dead weight sitting in `package.json` from an
+earlier session — flagged here rather than removed unprompted, since deleting a dependency someone
+else added isn't a Phase 9 task.
+
+**Verified with real content, not just that the route returns 200 — the same lesson the search
+bug (Phase 7) and the two Phase 8 regressions taught this session: check the actual output, not
+just its status code:**
+- A real memo was built through the actual UI with a rich body (a bulleted list containing bold
+  and bold+italic text — the genuine Tiptap JSON that came out of real toolbar clicks, not
+  hand-crafted test fixtures), a real attachment row, submitted with two participants, approved
+  with a comment, plus a separate general comment.
+- **Raw substring search on the downloaded PDF bytes found nothing** — not because the content was
+  missing, but because `@react-pdf/renderer`'s content streams are `FlateDecode`-compressed, so a
+  naive "does the buffer contain this string" check is a false negative, not proof of a bug. Caught
+  before drawing the wrong conclusion by cross-checking with a proper parser instead of trusting
+  the naive check.
+- **Definitive verification**: fetched the real PDF via an authenticated browser session, decoded
+  it, and extracted its actual text with a PDF parser (`pdf-parse`, installed with `--no-save` and
+  uninstalled again immediately after — confirmed via `git status` that `package.json`/
+  `package-lock.json` were untouched, so nothing about this graded repo's dependency tree changed
+  for the sake of testing). Every field was present and correct: org name, memo number, subject,
+  "IN PROGRESS" status, author name + email, department, category, priority, all three dates, the
+  bulleted bold/italic body text exactly as stored, the attachment's name **and size**
+  ("budget-sheet.xlsx 44.2 KB" — this had looked *missing* in an earlier screenshot purely because
+  it was too small to read at that zoom level, not because it was actually absent; the text
+  extraction resolved the ambiguity definitively rather than leaving it as an assumption), the
+  full workflow history with the approval comment attributed correctly, and both comments with
+  correct type/author/timestamp.
+- **Authorization boundary, proven the same way as every prior phase's authorization claims** —
+  three real signed-in sessions against the same draft memo (author never submitted it, so no
+  workflow participants exist yet — the strictest case, since visibility can only come from
+  author/admin, not participation): a same-org user with zero involvement got **404**; a user in a
+  completely different organization got **404**; the actual author/org_admin got **200** with a
+  real PDF. Confirms the export endpoint doesn't accidentally widen access beyond what the memo
+  detail page itself already allows.
+- All test orgs/users/memos (including the one seeded with a raw attachment row rather than a real
+  upload — upload/download itself was already exhaustively verified via script in Phase 3's
+  follow-up verification, 17/17 checks, so this phase only needed to prove the PDF route's own
+  *listing* logic, not re-prove storage works) were deleted immediately after.
+
 ## In Progress 🚧
 
 - **Verify domain at resend.com/domains and update `RESEND_FROM_EMAIL`** before the demo/grading
@@ -764,7 +856,7 @@ deleted immediately after the run; both test scripts were deleted, not committed
       widening as Phase 4)
 - [x] ~~Phase 8 — Templates, delegation, versioning, audit log~~ **Done** — see Phase 8 section
       above, including a self-caught-and-fixed regression documented in full.
-- [ ] Phase 9 — PDF export
+- [x] ~~Phase 9 — PDF export~~ **Done** — see Phase 9 section above.
 - [ ] Phase 10 — Design pass (Swiss system applied consistently, **including the landing page
       rebuild flagged above**)
 - [ ] Phase 11 — Seed data + full demo scenario walkthrough
@@ -862,7 +954,11 @@ if needed. New entries below.)*
 - GitHub: https://github.com/arnobalam10-tech/PROJECT-3 (private).
 - `SUPABASE_SERVICE_ROLE_KEY`: set by the user in `.env.local` and Vercel (confirmed by the user
   directly, never seen in chat). Not yet re-tested against the invite-user flow.
-- Last migration applied: `20260829084000_026_drop_stale_submit_memo_overload`.
+- Last migration applied: `20260829084000_026_drop_stale_submit_memo_overload` — Phase 9 (PDF
+  export) needed no schema changes, pure application layer reading existing tables.
+- PDF export uses `@react-pdf/renderer` (already in `package.json` from an earlier session, now
+  actually wired up — see Phase 9). Runs server-side in the `/memos/[id]/pdf` Route Handler on
+  Node runtime (default for Next.js route handlers — no `edge` runtime override needed or set).
 - `SUPABASE_SERVICE_ROLE_KEY`: confirmed present in `.env.local` (independently re-verified, not
   taken on trust — see Phase 6). Not yet re-tested against invite-user specifically.
 - `RESEND_API_KEY`/`RESEND_FROM_EMAIL`: confirmed present and working — real delivery verified
