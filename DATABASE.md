@@ -195,6 +195,62 @@ project). As of this note:
     all (flagged as an ERROR by Supabase's advisor). Fixed by enabling RLS with zero policies —
     the table is only ever touched by the SECURITY DEFINER `generate_memo_number()`, so this
     correctly blocks all direct client access while leaving that function working.
+11. `20260829062148_011_workflow_steps` — `workflow_steps` table (dynamic routing engine, PRD
+    §7). `sequence_order` is `double precision`, not `int` as loosely implied by the original
+    schema note — chosen so inserting a participant between two existing steps never requires
+    renumbering the rest of the queue (bisect the gap instead). Exactly one `current` row per
+    memo enforced by a **partial unique index scoped to `memo_id`**
+    (`unique (memo_id) where status = 'current'`) — confirmed explicitly with the user before
+    creating it that this is per-memo, not a global singleton. No INSERT/UPDATE/DELETE policy at
+    all on this table — every mutation goes through the SECURITY DEFINER functions in migration
+    013, never direct client writes. Introduces `private.is_workflow_participant()` as a
+    SECURITY DEFINER helper for the same reason as `private.current_organization_id()` — a plain
+    subquery on `workflow_steps` from within its own SELECT policy reproduces the exact
+    self-referential-RLS bug from migration 004 (no non-recursive base case for a plain
+    participant, only for the author/admin branches).
+12. `20260829062227_012_comments_audit_notifications` — `comments`, `audit_log`, `notifications`
+    tables. `audit_log`/`notifications` have no client-facing INSERT policy at all — only written
+    via `private.log_audit_event()` / `private.notify_user()`, SECURITY DEFINER helpers callable
+    only from other SECURITY DEFINER functions (not granted to `authenticated` — unlike
+    `is_workflow_participant()`, which legitimately needs to run during RLS evaluation as the
+    client role). `comments` allows direct client INSERT, but only for `comment_type = 'general'`
+    (enforced by the `with_check` clause, not just app discipline) — typed comments
+    (approval/rejection/change_request) only come from the workflow-action functions. An
+    `AFTER INSERT` trigger on `comments` (`private.comments_after_insert()`, itself SECURITY
+    DEFINER so it can write to `audit_log`/`notifications` despite running off a plain client
+    INSERT) covers PRD §21/§13's "comment"/"comment added" audit and notification requirements
+    for the direct-insert path.
+13. `20260829062352_013_workflow_action_functions` — the six SECURITY DEFINER action functions:
+    `submit_memo`, `workflow_approve` (handles both "forward to next in chain" and "forward to
+    someone new" via an optional `p_forward_to_user_id`, and completion when nothing is left),
+    `workflow_decline_reroute`, `workflow_reject`, `workflow_request_changes`, `resubmit_memo`.
+    Shared `private.assert_current_holder()` locks (`for update`) and returns the current row,
+    raising unless the caller is its `assigned_user_id` — delegation (PRD §19) isn't wired in yet
+    since the `delegations` table doesn't exist until Phase 8; marked with an explicit
+    `TODO(Phase 8)` in the function body. **Two real bugs found only by actually running a test
+    script against these functions** (not by review) — see #15/#16 below.
+14. `20260829062406_014_widen_memo_and_attachment_visibility` — widens the Phase-3 `memos` SELECT
+    policy (author-or-admin-only) to also include anyone who `is_workflow_participant()`, per PRD
+    §14/§2.5 item 7. Same widening applied to `attachments`' table policy and the
+    `storage.objects` bucket policy, since PRD §12 says attachment access follows the memo's own
+    permissions. Also widens the author's UPDATE policy to allow edits while
+    `status = 'changes_requested'`, not just `'draft'` (needed for the resubmission flow — the
+    author edits content, then calls `resubmit_memo()`).
+15. `20260829063000_015_016_fix_submit_memo` — two bug fixes to `submit_memo`, both caught by
+    the workflow-engine test script actually calling it (see `STATUS.md` for the full pass/fail
+    writeup), not by code review: (1) a `CASE` expression choosing `'current'`/`'queued'`
+    resolved to `text`, which didn't implicitly cast against the `workflow_step_status` column
+    type inside a function body the way a bare string literal would; (2) the first attempted fix
+    used an explicit `::workflow_step_status` cast, which *also* failed — with `search_path = ''`
+    (deliberate, to prevent search-path hijacking in a SECURITY DEFINER function), an unqualified
+    type name in a cast can't resolve any more than an unqualified table name can. Needed
+    `::public.workflow_step_status`.
+16. `20260829063100_017_memo_versions` — `memo_versions` had been documented in this file since
+    Phase 1 but **was never actually created** — Phase 3's migration built
+    `memo_categories`/`memos`/`attachments` but missed it. Only surfaced when `submit_memo` tried
+    to write to it during the real test run and failed with "relation does not exist." A concrete
+    example of why the "actually run it" standard in `STATUS.md` matters more than reviewing the
+    SQL by eye.
 
 ## Notes for Claude Code
 

@@ -11,8 +11,10 @@ Updated by: Claude Code
 
 ## Current Phase
 
-Phase 3 (Memo core) — draft CRUD, categories, priorities, and attachments built and verified
-locally and (partially) in production. Deployed and live on Vercel.
+Phase 4 (Workflow engine) — built against the dynamic, holder-controlled routing model in
+`PRD.md` §7 (not the fixed-sequence version from the original spec PDF), and tested with the
+same evidence-based rigor as Phase 3's rich-text/attachment verification: every claim below is
+backed by an actual query result or a real HTTP call through the real API, not an assumption.
 
 ## Done ✅
 
@@ -93,6 +95,112 @@ FK can't be satisfied before the profile row exists).
   confirm (`src/app/(app)/memos/[id]/delete-draft-button.tsx`: click "delete draft" → button
   becomes "confirm delete" / "cancel"). Re-tested after the fix: works correctly, verified the row
   was actually gone from the DB afterward, not just that the UI navigated away.
+
+**Phase 4 — Workflow engine (dynamic, holder-controlled routing per PRD §7 / §2.5 items 5, 6, 8).**
+
+Before writing any schema, re-read `PRD.md` §7 and `DATABASE.md`'s `workflow_steps` design in
+full and stated the plan back to the user for confirmation (per their explicit request) — this
+caught one real design gap before it became code: the planned `workflow_steps` SELECT policy
+(visible to author/admin/*any participant*) would have used a subquery on `workflow_steps` from
+within its own policy to check participation, reproducing the exact self-referential-RLS bug from
+migration 004 in a new table. Fixed before writing it by introducing
+`private.is_workflow_participant()`, the same SECURITY DEFINER pattern as
+`private.current_organization_id()`.
+
+Schema (migrations 011–017, `private.` helpers, six SECURITY DEFINER action functions — full
+detail in `DATABASE.md`'s migrations log):
+- `workflow_steps` — mutable per-memo queue (`queued`/`current`/`approved`/`rejected`/
+  `changes_requested`/`declined`/`skipped`). `sequence_order` is `double precision` so inserting
+  someone mid-chain never requires renumbering. Exactly one `current` row **per memo** (partial
+  unique index `unique (memo_id) where status = 'current'` — **explicitly confirmed with the user
+  before creating it** that this is per-memo scoped, not a global lock across every memo in the
+  system). No client-facing INSERT/UPDATE/DELETE policy at all — every mutation goes through the
+  action functions below.
+- `comments`, `audit_log`, `notifications`, `memo_versions` — `audit_log`/`notifications` have no
+  client INSERT policy at all (only the trusted `private.log_audit_event()`/`private.notify_user()`
+  helpers can write them); `comments` allows direct client insert only for `comment_type='general'`
+  (enforced by the RLS `with_check`, not just app discipline) — an `AFTER INSERT` trigger on
+  `comments` auto-writes the matching `audit_log`/`notifications` rows for that path.
+- Six SECURITY DEFINER functions: `submit_memo`, `workflow_approve` (forward-to-next-in-chain,
+  forward-to-someone-new, or completion — one function, driven by an optional
+  `p_forward_to_user_id`), `workflow_decline_reroute`, `workflow_reject`, `workflow_request_changes`,
+  `resubmit_memo`. Every one starts by locking (`for update`) and checking the current-holder row
+  via a shared `private.assert_current_holder()` helper — delegation (PRD §19) isn't wired in yet
+  since `delegations` doesn't exist until Phase 8; marked with an explicit `TODO(Phase 8)` in the
+  function body rather than silently omitted.
+- Widened the Phase-3 `memos`/`attachments`/storage-bucket SELECT policies to include workflow
+  participants, not just author/admin, per PRD §14 / §2.5 item 7 — this was flagged as a to-do in
+  the last session's STATUS.md and is now done.
+
+**Two confirmations made explicitly before building, per the user's request:**
+1. The partial unique index is `unique (memo_id) where status = 'current'` — per-memo, not a
+   global singleton. Stated back to the user before creating it.
+2. Decline & reroute uses the *same* remaining-chain-stays-queued behavior as
+   approve-forward-to-someone-new (confirmed with the user rather than assumed) — verified by
+   test, not just by reading the migration back.
+
+**Rigorous testing — two rounds of ephemeral Node scripts** (real `@supabase/supabase-js` client,
+real HTTP calls, real signed-in users — Carol/Dave/Erin/Bob created as real `auth.users` rows
+with real bcrypt password hashes via `pgcrypto`, not password-less stand-ins, specifically so they
+could sign in through the actual API rather than only via SQL simulation). **73/73 checks passed**
+across both rounds; all test data and both scripts deleted afterward. Full result, condensed:
+- **Non-holder cannot act, server-side**: a queued (not-yet-current) participant, the memo's own
+  author (when not the current holder), and a user in a *different organization entirely* were
+  all denied when calling the RPC directly — proven by checking the actual error returned, not by
+  observing a hidden button. Confirmed zero side effects: `workflow_steps` state was
+  byte-identical before and after all four denied attempts.
+- **Cross-org**: the different-org user couldn't even `SELECT` the memo or its `workflow_steps`
+  rows (RLS), and separately couldn't call the action RPC (the function's own holder check, since
+  `assert_current_holder` is itself SECURITY DEFINER and bypasses RLS internally — meaning it must
+  do its *own* authorization check, which it does).
+- **Forward outside the original chain**: approving with a forward-to-someone-new target actually
+  worked (new `current` row created, `is_original=false`, `added_by` set correctly, positioned
+  between the two existing `sequence_order` values) — **and** the untouched original participants'
+  `queued` rows were verified byte-identical before/after (same id, status, timestamps).
+- **Immutability**: after *further* unrelated actions happened later in the same memo's life, the
+  earlier resolved row was re-checked and was still byte-identical to its state immediately after
+  resolution — not just "didn't happen to change," genuinely re-verified after more history
+  accumulated.
+- **Reject vs. request-changes vs. decline, on three separate memos**: reject is terminal
+  (remaining `queued` rows → `skipped`, memo → `rejected` with `completed_at` set) and refuses to
+  run without a reason; request-changes is *not* terminal (remaining `queued` rows stay `queued`,
+  `completed_at` stays null) and refuses to run without an explanation; decline resolves to
+  `declined` (neither `approved` nor `rejected`) and doesn't change the memo's status at all. All
+  three produce genuinely distinct database states, not just distinct button labels.
+- **Resubmission**: after request-changes, the author edited the memo and called `resubmit_memo`
+  — verified a second `memo_versions` row was created, a new transient `current` row appeared for
+  the author, and then the author's own `workflow_approve` call (the *same* primitive anyone else
+  uses, no special "resume" function) correctly picked up the **original, still-queued** row left
+  over from before the changes were requested — proving the "no special resume logic" claim in
+  §7.1 item 5 for real, not just by inspection.
+- **audit_log/notifications proof for every action** (per the user's explicit ask — a claim isn't
+  evidence): after each of submit/approve(×2 forms)/decline/reject/request-changes/resubmit,
+  queried `audit_log` directly and confirmed a row with the correct `event_type` and `user_id`,
+  and queried `notifications` for the expected recipient/type. Not inferred from
+  `workflow_steps` state — checked directly.
+
+**Two real bugs found by actually running the test script (not by reviewing the SQL) — both
+fixed and documented in `DATABASE.md`:**
+- `submit_memo`'s `CASE ... 'current'/'queued' ... END` expression resolved to `text`, which
+  didn't implicitly cast against the `workflow_step_status` enum column inside a function body.
+- The fix's explicit `::workflow_step_status` cast *also* failed, because with `search_path = ''`
+  (deliberate hardening against search-path hijacking in a SECURITY DEFINER function), an
+  unqualified type name in a cast can't resolve any more than an unqualified table name can —
+  needed `::public.workflow_step_status`.
+- Separately: `memo_versions` had been *documented* in `DATABASE.md` since Phase 1 but was
+  **never actually created** — Phase 3's migration built the other three tables and missed it.
+  Only surfaced when `submit_memo` tried to write to it during the real test run and got
+  "relation does not exist." Created in migration 017.
+
+**UI built and manually verified end-to-end in the real browser** (not just the engine via
+script): memo creation → submit panel (ordered participant picker) → submit → sign in as the
+participant → action panel appears (approve/decline/reject/request-changes) → approve with
+forward-to-someone-new → timeline updates correctly → sign in as the new holder → approve with
+nothing left → memo reaches `Approved`, action panel disappears. **One real UI bug found and
+fixed during this walkthrough**: the timeline showed the same comment text twice (once from the
+`workflow_steps.comment` field, once from the separate `comments` row the RPC also writes) —
+fixed by having step-timeline entries show only the action label, letting the `comments` entries
+own the actual text.
 
 ## In Progress 🚧
 
@@ -181,15 +289,11 @@ deleted immediately after the run; both test scripts were deleted, not committed
       **Phase 10 (Design pass)** rather than as a one-off now, per PRD §26's explicit instruction
       that the design pass should be "one dedicated sweep... so it's actually consistent" — but
       calling it out by name here so it isn't quietly forgotten inside that broader phase.
-- [ ] Phase 4 — Workflow engine. **Must be built against the new dynamic, holder-controlled
-      routing model in `PRD.md` §7 and the redesigned `workflow_steps` table in `DATABASE.md`**
-      (queued/current/approved/rejected/changes_requested/declined/skipped, `is_original`/
-      `added_by` for tracking deviations from the suggested chain) — there is no old
-      fixed-sequence version deployed yet, so there's nothing to migrate away from. Also needs:
-      widening the Phase-3 `memos` SELECT policy to match PRD §14 (regular users see memos they
-      authored **or were/are a participant in**, not just authored — this was deliberately scoped
-      down for Phase 3 since `workflow_steps` didn't exist yet).
-- [ ] Phase 5 — Inbox/Outbox/Details/Timeline
+- [x] ~~Phase 4 — Workflow engine~~ **Done** — see Phase 4 section above.
+- [ ] Phase 5 — Inbox/Outbox/Details/Timeline (the memo detail page already has a timeline; Phase
+      5 is specifically the Inbox/My-Memos/Completed *list* views with the full column/filter/sort
+      spec from PRD §9 — `/inbox` is still the Phase-1 placeholder, `/memos` only shows "my
+      memos", not the inbox-of-things-awaiting-my-action view)
 - [ ] Phase 6 — Notifications (in-app + Resend email) — also add "Relay" branding to the email
       templates once built (PRD's naming instruction covers "emails from Resend" explicitly).
 - [ ] Phase 7 — Search, dashboard, reporting (regular-user search/visibility scope per PRD §2.5
@@ -248,6 +352,31 @@ if needed. New entries below.)*
   submitting requires defining an initial participant chain — which needs `workflow_steps`
   (Phase 4). Building a submit button now would either need to be non-functional or would require
   jumping ahead into Phase 4's data model, both of which `CLAUDE.md` §5 says not to do.
+- **`memos.status` stays `'submitted'` as the single "in flight" status throughout the workflow.**
+  §8 lists `pending_review`/`pending_approval` as part of the minimum status set, and they remain
+  in the enum, but nothing in the dynamic-routing model (§2.5 item 8 explicitly collapsed the
+  Reviewer-vs-Approver step-type distinction) gives a principled way to pick between them at any
+  given moment — inventing an arbitrary rule (e.g. "first step = review, later = approval") would
+  contradict "every step is fundamentally the same underlying thing." Left unused rather than
+  guessed at.
+- **`audit_log`/`notifications` tables built now (Phase 4), not deferred to their nominal Build
+  Phases (6/8).** `DATABASE.md`'s own instructions say workflow actions should write these
+  consistently "rather than scattering audit-writes ad hoc across the codebase" — retrofitting
+  them onto six already-built action functions later would be exactly the ad hoc pattern that
+  line warns against. The *UI* for these (in-app notification center, admin audit log viewer)
+  is still genuinely Phase 6/8 — only the data-layer writes happen now, which is a groundwork
+  decision in the same spirit as `CLAUDE.md` §5's "write real seed data early" guidance, not scope
+  creep into those phases' user-facing work.
+- **Test users for Phase 4 verification were created with real bcrypt password hashes
+  (`pgcrypto`'s `crypt()`/`gen_salt('bf')`), not passwordless stand-ins.** This was specifically so
+  they could sign in through the actual Supabase Auth API and exercise the RPCs over real HTTP,
+  matching the same rigor as the Phase 3 attachment tests, rather than only via SQL-level
+  `request.jwt.claims` simulation. Manually inserting `auth.users` rows this way requires also
+  inserting a matching `auth.identities` row and explicitly setting `confirmation_token`/
+  `recovery_token`/etc. to `''` rather than leaving them `NULL` — GoTrue's Go driver can't scan a
+  NULL into those columns and fails sign-in with an opaque "Database error querying schema" if
+  they're left unset. Worth remembering if seed data (Phase 11) ever needs pre-confirmed accounts
+  outside the normal `inviteUserByEmail` flow.
 - **`window.confirm()` avoided going forward.** Beyond the delete-draft fix, any future
   destructive-action confirmation in this app should use the same in-app two-step pattern, not a
   native browser dialog — both for design-system consistency and because it's the only pattern
@@ -264,8 +393,13 @@ if needed. New entries below.)*
 - `SUPABASE_SERVICE_ROLE_KEY`: set by the user in `.env.local` and Vercel (confirmed by the user
   directly, never seen in chat). Not yet re-tested against the invite-user flow.
 - Resend: still not configured.
-- Last migration applied: `20260829045457_010_memo_number_counters_rls`.
+- Last migration applied: `20260829063100_017_memo_versions`.
 - New Storage bucket: `attachments` (private).
+- New tables this session: `workflow_steps`, `comments`, `audit_log`, `notifications`,
+  `memo_versions`. New `private.` helper functions: `is_workflow_participant()`,
+  `assert_current_holder()`, `log_audit_event()`, `notify_user()`. New client-callable RPCs:
+  `submit_memo`, `workflow_approve`, `workflow_decline_reroute`, `workflow_reject`,
+  `workflow_request_changes`, `resubmit_memo`.
 
 ## Demo / Seed Data Notes
 
