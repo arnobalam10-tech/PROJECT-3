@@ -7,6 +7,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { STATUS_LABELS } from "@/components/memo-badges";
 
 export default async function DashboardPage() {
+  // TEMPORARY, for one controlled visual-verification round only -- proves
+  // the loading.tsx Suspense boundary genuinely activates on the real
+  // deployed app, not just "the code looks right" locally. Removed in the
+  // immediate next commit.
+  await new Promise((r) => setTimeout(r, 2500));
   const profile = await requireProfile();
   const supabase = await createClient();
 
