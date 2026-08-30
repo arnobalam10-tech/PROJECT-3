@@ -65,7 +65,7 @@ export function UserRowControls({ userId, role, status, departmentId, department
           })
         }
       >
-        {status === "active" ? "Deactivate" : "Activate"}
+        {pending ? "Working…" : status === "active" ? "Deactivate" : "Activate"}
       </Button>
     </div>
   );

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { logQueryError } from "@/lib/log-query-error";
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/submit-button";
 import { MarkReadButton } from "./mark-read-button";
 import { markAllNotificationsRead } from "./actions";
 
@@ -40,9 +40,9 @@ export default async function NotificationsPage() {
         </div>
         {unreadCount > 0 && (
           <form action={markAllNotificationsRead}>
-            <Button type="submit" variant="outline" size="sm">
+            <SubmitButton variant="outline" size="sm" pendingText="Marking…">
               Mark all read
-            </Button>
+            </SubmitButton>
           </form>
         )}
       </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
@@ -28,6 +28,22 @@ import {
   SidebarMenuBadge,
   SidebarHeader,
 } from "@/components/ui/sidebar";
+
+// Rendered as a child of next/link's <Link> (through SidebarMenuButton's
+// render prop) so useLinkStatus's context is available -- shows a brief
+// spinner on the clicked nav item itself, from click until the target
+// route's segment starts streaming (at which point its own loading.tsx
+// skeleton takes over).
+function NavItemPendingIndicator() {
+  const { pending } = useLinkStatus();
+  if (!pending) return null;
+  return (
+    <span
+      className="ml-auto h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent opacity-60"
+      aria-hidden="true"
+    />
+  );
+}
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -75,6 +91,7 @@ export function AppSidebar({ isAdmin, unreadCount }: { isAdmin: boolean; unreadC
                   >
                     <item.icon />
                     <span>{item.label}</span>
+                    <NavItemPendingIndicator />
                   </SidebarMenuButton>
                   {item.href === "/notifications" && unreadCount > 0 && (
                     <SidebarMenuBadge className="bg-primary text-primary-foreground">
@@ -101,6 +118,7 @@ export function AppSidebar({ isAdmin, unreadCount }: { isAdmin: boolean; unreadC
                     >
                       <item.icon />
                       <span>{item.label}</span>
+                      <NavItemPendingIndicator />
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 ))}

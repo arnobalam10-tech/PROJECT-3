@@ -23,7 +23,7 @@ export function MarkReadButton({ notificationId }: { notificationId: string }) {
         })
       }
     >
-      Mark read
+      {pending ? "Marking…" : "Mark read"}
     </Button>
   );
 }

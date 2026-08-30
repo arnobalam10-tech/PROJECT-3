@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { LogOut, User } from "lucide-react";
+import { useTransition } from "react";
+import { LogOut, User, Loader2 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -25,6 +26,8 @@ function initials(name: string) {
 }
 
 export function UserMenu({ name, role }: { name: string; role: string }) {
+  const [signingOut, startSignOut] = useTransition();
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger className="flex items-center gap-2 rounded-full outline-none ring-primary focus-visible:ring-2">
@@ -47,9 +50,17 @@ export function UserMenu({ name, role }: { name: string; role: string }) {
           Profile
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => logout()} variant="destructive">
-          <LogOut className="mr-2 h-4 w-4" />
-          Sign out
+        <DropdownMenuItem
+          onClick={() => startSignOut(() => logout())}
+          variant="destructive"
+          disabled={signingOut}
+        >
+          {signingOut ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <LogOut className="mr-2 h-4 w-4" />
+          )}
+          {signingOut ? "Signing out…" : "Sign out"}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
