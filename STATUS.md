@@ -4,10 +4,90 @@
 rules. It is the source of truth for "what's the current state of the project" — more reliable
 than memory of prior sessions. Be precise and honest; "mostly done" is not an acceptable status.
 
-Last updated: 2026-08-29 (post-submission bugfix session)
+Last updated: 2026-08-30 (loading-feedback session)
 Updated by: Claude Code
 
 ---
+
+## Loading feedback across the app (2026-08-30)
+
+The user reported that navigation and actions gave no visual signal of being in progress, even
+though they were working. Three additions, all verified with real evidence on the **live
+production URL**, not just locally — this project has already hit dev-vs-prod discrepancies once
+(the rich-text hydration timing case), so that instruction was taken literally.
+
+**1. Route-level `loading.tsx`** — added to all 15 authenticated-app routes that didn't already
+have one (all of them: dashboard, inbox, my memos, completed, memo detail, memo creation,
+notifications, profile, search, delegations, and all 5 admin pages), using Next.js App Router's
+built-in Suspense-boundary convention. Shared skeleton primitives in
+`src/components/loading-skeletons.tsx` (`PageHeaderSkeleton`, `StatTilesSkeleton`,
+`TableSkeleton`, `CardListSkeleton`, `FormSkeleton`, `MemoDetailSkeleton`) reuse the real
+`Card`/`Skeleton` shadcn components so each page's fallback matches its actual container shape
+(same `rounded-xl border bg-card shadow-sm` look, same `max-w-6xl`/`max-w-3xl`/`max-w-2xl`
+container widths) rather than a generic or jarring blank flash. Deliberately **not** added to
+`/login`, `/signup`, or the landing page — static pages with no async data-dependent Suspense
+boundary worth a skeleton for.
+
+**2. Sidebar nav pending state** — `useLinkStatus()` (Next 15.3+/16, confirmed present in this
+project's installed `next@16.3.3` by reading `node_modules/next/dist/client/app-dir/link.js`
+directly before using it, not assumed). A small spinner (`NavItemPendingIndicator` in
+`app-sidebar.tsx`) renders as a child of each nav item's `<Link>` — through the existing
+`SidebarMenuButton`/Base UI `render`-prop wrapper, which still works since `useLinkStatus` reads
+React context, not literal DOM parentage. Chosen over a top-of-page progress bar per the task's
+"pick whichever is simpler to wire in consistently" — no extra dependency, and it composes
+naturally with the `loading.tsx` work (the spinner shows from click until the target route's
+segment starts streaming, at which point that route's own skeleton takes over).
+
+**3. Server Action button loading states** — audited every Server-Action-triggering control in
+the codebase (grepped for `useActionState`/`useFormStatus`/`useTransition` usage, plus every
+`onClick`/`<form action=` call site) before touching anything. Most of the app already had
+`useActionState`-driven pending states from earlier phases (login, signup, profile, memo forms,
+all 4 workflow actions in `action-panel.tsx`, delegation/template/department create forms, invite-
+user, comment box, submit panel, resubmit, attachment upload, `ConfirmActionButton`'s shared
+modal-confirm pattern used by delete-draft/delete-template/revoke-delegation). **Two real gaps
+found**: `admin/departments`' Deactivate/Activate button and notifications' "Mark all read" were
+both bare `<form action={...}>` submits rendered straight from a Server Component with zero
+pending feedback — fixed with a new reusable `SubmitButton` (`src/components/submit-button.tsx`)
+using `useFormStatus`, the textbook case for that hook (a client component *inside* a
+server-action-bound form, without needing `useActionState` in the form itself). Smaller polish:
+button text now changes (not just `disabled`) on `admin/users`' role-toggle row and
+`mark-read-button.tsx`; `attachment-list.tsx`'s download/delete icon buttons swap their icon for a
+spinning `Loader2` while pending; `user-menu.tsx`'s Sign out now shows a pending state too.
+**Incidental correctness fix**: `attachment-list.tsx`'s pending state used to be a single
+`useTransition()` shared across the *entire* attachment list (one hook call at the list level) —
+downloading one attachment disabled every other attachment's buttons too. Split into a per-row
+`AttachmentRow` component with its own transition, so each row's pending state is now independent.
+
+**Verified with real evidence on `https://relay-cyan-alpha.vercel.app`, not just "the code looks
+right":**
+- Full `next build` (21/21 routes) + `eslint`: clean.
+- **A controlled, disclosed temporary test** (per this project's established practice of real
+  evidence over trusting code review): added a 2.5-second artificial delay to the dashboard page's
+  data-fetching, committed with an explicit "TEMPORARY" message, pushed, and — on the live
+  production URL — captured two screenshots showing the actual `loading.tsx` skeleton rendering
+  mid-navigation: once via the mobile off-canvas sidebar sheet, once via the desktop persistent
+  sidebar (showing the full composition — page header, 4 stat tiles, both content cards — with the
+  sidebar already highlighting "Dashboard" as active before the content finished loading). Both
+  resolved cleanly afterward with `document.querySelectorAll('[data-slot="skeleton"]').length ===
+  0`. The delay was then reverted and pushed as its own commit, confirmed removed via `git diff`,
+  and the dashboard re-verified fast and correct on production afterward (real data, hard
+  navigation with cache bypassed).
+- **A real Server Action pending state caught live on production**: clicked "Deactivate" on a
+  demo department (`admin/departments`) via a batched click+screenshot — the button visibly
+  changed to "Deactivating…" before the row's status flipped to `inactive`. Reverted immediately
+  afterward (clicked "Activate") to restore the seeded demo data to its original state, confirmed
+  via the page re-rendering all 4 departments back to `active`.
+- Zero console errors at any point during this session's production testing.
+- The nav pending spinner's own code path was confirmed error-free in production and the sidebar's
+  active-item highlight was confirmed to update immediately on click (visible in the same
+  screenshots as the `loading.tsx` proof above) — its own spinner window is inherently very brief
+  by design (it clears the instant the target segment starts streaming, which is also the instant
+  `loading.tsx` takes over), and wasn't independently caught in mid-spin on camera the way the
+  other two mechanisms were; the underlying API is used exactly per Next.js's documented contract
+  and produced no errors anywhere it fired.
+
+**Commits**: `f57e5bc` (the real feature work), `6ffcc9f` (temporary test delay, disclosed),
+`850b9c2` (revert, confirmed clean).
 
 ## Post-submission bugfix session — profile-menu navigation + change password
 
